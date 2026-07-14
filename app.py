@@ -1,8 +1,10 @@
 import pandas as pd
 import streamlit as st
 
+from datetime import datetime
+
 from seed import seed_news
-from services import ScriptService, SummaryService
+from services import NewsService, ScriptService, SummaryService
 
 
 st.set_page_config(
@@ -14,6 +16,7 @@ st.set_page_config(
 # 애플리케이션 시작 시 초기 뉴스 삽입
 seed_news()
 
+news_service = NewsService()
 summary_service = SummaryService()
 script_service = ScriptService()
 
@@ -22,13 +25,72 @@ st.title("🎙️ KomCast AI")
 st.caption("뉴스 요약 및 팟캐스트 스크립트 생성 시안")
 
 
-summary_tab, script_tab = st.tabs(
+news_tab, summary_tab, script_tab = st.tabs(
     [
+        "뉴스 추가",
         "뉴스 요약",
         "스크립트 생성",
     ]
 )
 
+with news_tab:
+    st.header("뉴스 추가")
+
+    with st.form("news_create_form", clear_on_submit=True):
+        title = st.text_input(
+            "뉴스 제목",
+            placeholder="뉴스 제목을 입력하세요.",
+        )
+
+        content = st.text_area(
+            "뉴스 내용",
+            placeholder="뉴스 내용을 입력하세요.",
+            height=250,
+        )
+
+        published_date = st.date_input(
+            "뉴스 생성 날짜",
+            value=datetime.now().date(),
+        )
+
+        published_time = st.time_input(
+            "뉴스 생성 시간",
+            value=datetime.now().time().replace(
+                second=0,
+                microsecond=0,
+            ),
+        )
+
+        submit_button = st.form_submit_button(
+            "뉴스 저장",
+            use_container_width=True,
+        )
+
+    if submit_button:
+        try:
+            published_at = datetime.combine(
+                published_date,
+                published_time,
+            )
+
+            news = news_service.create_news(
+                title=title,
+                content=content,
+                published_at=published_at,
+            )
+
+            st.success(
+                f"뉴스가 저장되었습니다. "
+                f"뉴스 ID: {news.id}"
+            )
+
+        except ValueError as error:
+            st.warning(str(error))
+
+        except Exception as error:
+            st.error(
+                f"뉴스 저장 중 오류가 발생했습니다: {error}"
+            )
 
 with summary_tab:
     st.header("뉴스 요약")

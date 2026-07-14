@@ -16,6 +16,39 @@ class SummaryResult:
     created_count: int
     skipped_count: int
 
+class NewsService:
+    def __init__(self) -> None:
+        self.news_repository = NewsRepository()
+
+    def create_news(
+        self,
+        title: str,
+        content: str,
+        published_at: datetime,
+    ) -> News:
+        normalized_title = title.strip()
+        normalized_content = content.strip()
+
+        if not normalized_title:
+            raise ValueError("뉴스 제목을 입력해주세요.")
+
+        if not normalized_content:
+            raise ValueError("뉴스 내용을 입력해주세요.")
+
+        news = News(
+            title=normalized_title,
+            content=normalized_content,
+            published_at=published_at,
+        )
+
+        with create_session() as session:
+            self.news_repository.save(session, news)
+
+            session.commit()
+            session.refresh(news)
+
+            return news
+
 
 class SummaryService:
     def __init__(self) -> None:

@@ -7,6 +7,13 @@ from models import News, NewsSummary, Script
 
 
 class NewsRepository:
+    def save(
+        self,
+        session: Session,
+        news: News,
+    ) -> None:
+        session.add(news)
+
     def save_all(
         self,
         session: Session,
