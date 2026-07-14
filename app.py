@@ -72,7 +72,6 @@ with summary_tab:
                 {
                     "뉴스 ID": summary.news.id,
                     "제목": summary.news.title,
-                    "주제": summary.news.topic,
                     "뉴스 생성 시간": summary.news.published_at,
                     "요약": summary.content,
                     "요약 생성 시간": summary.created_at,
