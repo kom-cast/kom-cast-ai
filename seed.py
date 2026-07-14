@@ -14,7 +14,6 @@ INITIAL_NEWS = [
             "글로벌 클라우드 기업들이 데이터센터 도입을 검토하고 있다."
         ),
         published_at=datetime(2026, 7, 14, 8, 30),
-        topic="AI 반도체",
     ),
     News(
         title="HBM 시장 성장 전망",
@@ -24,7 +23,6 @@ INITIAL_NEWS = [
             "삼성전자와 SK하이닉스는 생산 능력 확대를 추진하고 있다."
         ),
         published_at=datetime(2026, 7, 14, 10, 0),
-        topic="메모리 반도체",
     ),
     News(
         title="미국, AI 반도체 수출 규제 검토",
@@ -34,7 +32,6 @@ INITIAL_NEWS = [
             "구체적인 적용 대상과 시행 시기는 아직 확정되지 않았다."
         ),
         published_at=datetime(2026, 7, 14, 11, 20),
-        topic="반도체 규제",
     ),
 ]
 
