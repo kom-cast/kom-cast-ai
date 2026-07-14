@@ -111,11 +111,17 @@ with summary_tab:
 
     if summarize_button:
         try:
-            result = summary_service.summarize_unsummarized_news()
+            with st.spinner("🤖 AI가 뉴스를 요약하고 있습니다..."):
+                result = summary_service.summarize_unsummarized_news()
 
             if result.created_count == 0:
                 st.info("새롭게 요약할 뉴스가 없습니다.")
             else:
+                st.toast(
+                    "AI 뉴스 요약이 완료되었습니다!",
+                    icon="🎉",
+                )
+
                 st.success(
                     f"{result.created_count}개의 뉴스 요약을 저장했습니다."
                 )
@@ -163,8 +169,10 @@ with script_tab:
         use_container_width=True,
     ):
         try:
-            script = script_service.create_script()
+            with st.spinner("🎙️ AI가 스크립트를 생성하고 있습니다..."):
+                script = script_service.create_script()
 
+            st.toast("스크립트 생성 완료!", icon="🎉")
             st.success("스크립트를 생성하고 저장했습니다.")
 
             st.text_area(
