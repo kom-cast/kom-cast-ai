@@ -1,0 +1,77 @@
+from fastapi.testclient import TestClient
+from pydub.generators import Sine
+
+import app.api.briefings as briefings_module
+from app.main import app
+from app.script.models import DialogueLine
+from app.tts.synthesizer import LineAudio, WordTiming
+
+
+def _fake_line_audio(speaker: str, stock: str, text: str, seconds: float = 0.5) -> LineAudio:
+    tone = Sine(440).to_audio_segment(duration=int(seconds * 1000))
+    buffer = tone.export(format="mp3")
+    return LineAudio(
+        line=DialogueLine(speaker=speaker, stock=stock, text=text),
+        audio=buffer.read(),
+        audio_format="mp3",
+        words=[WordTiming(text=text, start_sec=0.0, end_sec=seconds)],
+    )
+
+
+def test_repeated_script_uses_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(briefings_module, "AUDIO_DIR", tmp_path)
+
+    call_count = 0
+
+    async def fake_synthesize_lines(lines: list[DialogueLine]) -> list[LineAudio]:
+        nonlocal call_count
+        call_count += 1
+        return [_fake_line_audio(line.speaker, line.stock, line.text) for line in lines]
+
+    monkeypatch.setattr(briefings_module, "synthesize_lines", fake_synthesize_lines)
+
+    client = TestClient(app)
+    payload = {
+        "briefing_id": "test",
+        "lines": [{"speaker": "코스", "stock": "삼성전자", "text": "안녕하세요"}],
+    }
+
+    first = client.post("/briefings", json=payload)
+    second = client.post("/briefings", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    assert call_count == 1
+
+
+def test_different_script_bypasses_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(briefings_module, "AUDIO_DIR", tmp_path)
+
+    call_count = 0
+
+    async def fake_synthesize_lines(lines: list[DialogueLine]) -> list[LineAudio]:
+        nonlocal call_count
+        call_count += 1
+        return [_fake_line_audio(line.speaker, line.stock, line.text) for line in lines]
+
+    monkeypatch.setattr(briefings_module, "synthesize_lines", fake_synthesize_lines)
+
+    client = TestClient(app)
+    first = client.post(
+        "/briefings",
+        json={
+            "briefing_id": "same-id",
+            "lines": [{"speaker": "코스", "stock": "삼성전자", "text": "첫 번째 스크립트"}],
+        },
+    )
+    second = client.post(
+        "/briefings",
+        json={
+            "briefing_id": "same-id",
+            "lines": [{"speaker": "코스", "stock": "삼성전자", "text": "다른 스크립트"}],
+        },
+    )
+
+    assert first.json()["audioUrl"] != second.json()["audioUrl"]
+    assert call_count == 2
