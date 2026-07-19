@@ -13,7 +13,7 @@ engine = create_engine(
     ),
 )
 
-SessionLocal = sessionmaker(
+SessionFactory = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,

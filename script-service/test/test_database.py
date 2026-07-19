@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from app.database import DATABASE_URL, SessionFactory
+from app.config import DATABASE_URL, SessionFactory
 
 
 def test_database_connection() -> None:

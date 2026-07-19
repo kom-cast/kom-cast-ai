@@ -54,12 +54,12 @@ class StockScript(Base):
         nullable=False,
     )
 
-    period_start: Mapped[datetime] = mapped_column(
+    start_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
     )
 
-    period_end: Mapped[datetime] = mapped_column(
+    end_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
     )
@@ -78,8 +78,8 @@ class StockScript(Base):
     __table_args__ = (
         UniqueConstraint(
             "stock_id",
-            "period_start",
-            "period_end",
+            "start_at",
+            "end_at",
             name="uq_stock_script_period",
         ),
     )

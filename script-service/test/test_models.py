@@ -72,22 +72,8 @@ def test_save_stock_news_summary(session) -> None:
 def test_save_stock_script(session) -> None:
     stock_script = StockScript(
         stock_id=1,
-        period_start=datetime(
-            2026,
-            7,
-            16,
-            0,
-            0,
-            tzinfo=timezone.utc,
-        ),
-        period_end=datetime(
-            2026,
-            7,
-            17,
-            0,
-            0,
-            tzinfo=timezone.utc,
-        ),
+        start_at=datetime(2026, 7, 16, 0, 0,),
+        end_at=datetime(2026, 7, 17, 0, 0,),
         script_content="테스트 스크립트입니다.",
     )
 
@@ -99,35 +85,20 @@ def test_save_stock_script(session) -> None:
 
 
 def test_duplicate_stock_script_is_rejected(session) -> None:
-    period_start = datetime(
-        2026,
-        7,
-        16,
-        0,
-        0,
-        tzinfo=timezone.utc,
-    )
-
-    period_end = datetime(
-        2026,
-        7,
-        17,
-        0,
-        0,
-        tzinfo=timezone.utc,
-    )
+    start_at=datetime(2026, 7, 16, 0, 0,)
+    end_at=datetime(2026, 7, 17, 0, 0,)
 
     first_script = StockScript(
         stock_id=1,
-        period_start=period_start,
-        period_end=period_end,
+        start_at=start_at,
+        end_at=end_at,
         script_content="첫 번째 스크립트",
     )
 
     second_script = StockScript(
         stock_id=1,
-        period_start=period_start,
-        period_end=period_end,
+        start_at=start_at,
+        end_at=end_at,
         script_content="두 번째 스크립트",
     )
 

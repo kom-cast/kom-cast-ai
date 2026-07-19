@@ -2,13 +2,15 @@ import asyncio
 from datetime import datetime
 
 from app.ai_client import AiClient
-from app.repositories import NewsRepository
+from app.models import StockScript
+from app.repositories import NewsRepository, ScriptRepository
 
 
 class ScriptService:
     def __init__(
         self,
         news_repository: NewsRepository,
+        script_repository: ScriptRepository,
         ai_client: AiClient,
         max_concurrency: int = 5,
     ) -> None:
@@ -18,6 +20,7 @@ class ScriptService:
             )
 
         self.news_repository = news_repository
+        self.script_repository = script_repository
         self.ai_client = ai_client
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
@@ -37,9 +40,7 @@ class ScriptService:
         }
         """
         if start_at >= end_at:
-            raise ValueError(
-                "start_at must be earlier than end_at"
-            )
+            raise ValueError("start_at must be earlier than end_at")
 
         unique_stock_ids = list(dict.fromkeys(stock_ids))
 
@@ -85,9 +86,22 @@ class ScriptService:
         )
 
         async with self.semaphore:
-            return await self.ai_client.generate_script(
-                source
+            generated_script = (
+                await self.ai_client.generate_script(
+                    source
+                )
             )
+
+        stock_script = StockScript(
+            stock_id=stock_id,
+            start_at=start_at,
+            end_at=end_at,
+            script_content=generated_script,
+        )
+
+        self.script_repository.save(stock_script)
+
+        return generated_script
 
     @staticmethod
     def _combine_news_summaries(
