@@ -33,3 +33,8 @@ SessionFactory = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+def create_tables() -> None:
+    import models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
