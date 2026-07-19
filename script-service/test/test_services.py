@@ -1,41 +1,114 @@
-from datetime import datetime, timezone
-from unittest.mock import Mock
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from app.ai_client import AiClient
-from app.models import StockNewsSummary
 from app.repositories import NewsRepository
 from app.services import ScriptService
 
 
+@dataclass
+class FakeNewsSummary:
+    title: str
+    summary_content: str
+
+
 class TestScriptService:
-    def test_generate_script_calls_ai_with_news_summaries(self) -> None:
+    @pytest.mark.asyncio
+    async def test_generate_scripts_generates_script_for_each_stock(
+        self,
+    ) -> None:
         # given
-        start=datetime(2026, 7, 16,)
-        end=datetime(2026, 7, 17,)
-
-        first_news = StockNewsSummary(
-            title="삼성전자 반도체 투자 확대",
-            summary_content="삼성전자가 반도체 생산시설 투자를 확대했다.",
-            stock_id=1,
-            news_published_at=datetime(2026, 7, 16, 9, 0,),
-        )
-
-        second_news = StockNewsSummary(
-            title="삼성전자 신제품 공개",
-            summary_content="삼성전자가 새로운 모바일 제품을 공개했다.",
-            stock_id=1,
-            news_published_at=datetime(2026, 7, 16, 15, 0,),
-        )
-
         news_repository = Mock(spec=NewsRepository)
-        news_repository.find_news_summaries.return_value = [
-            first_news,
-            second_news,
+
+        stock_1_news = [
+            FakeNewsSummary(
+                title="삼성전자 반도체 투자 확대",
+                summary_content="삼성전자가 반도체 설비 투자를 확대했다.",
+            ),
+        ]
+
+        stock_2_news = [
+            FakeNewsSummary(
+                title="SK하이닉스 신규 제품 발표",
+                summary_content="SK하이닉스가 신규 메모리 제품을 발표했다."
+            ),
+        ]
+
+        news_repository.find_news_summaries.side_effect = [
+            stock_1_news,
+            stock_2_news,
         ]
 
         ai_client = Mock(spec=AiClient)
-        ai_client.generate_script.return_value = (
-            "오늘 삼성전자 관련 주요 소식을 전해드립니다."
+        ai_client.generate_script = AsyncMock(
+            side_effect=[
+                "삼성전자 스크립트",
+                "SK하이닉스 스크립트",
+            ]
+        )
+
+        service = ScriptService(
+            news_repository=news_repository,
+            ai_client=ai_client,
+            max_concurrency=5,
+        )
+
+        start_at = datetime(2026, 7, 18, 0, 0)
+        end_at = datetime(2026, 7, 19, 0, 0)
+
+        # when
+        result = await service.generate_scripts(
+            stock_ids=[1, 2],
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+        # then
+        assert result == {
+            1: "삼성전자 스크립트",
+            2: "SK하이닉스 스크립트",
+        }
+
+        assert (news_repository.find_news_summaries.call_count== 2)
+
+        news_repository.find_news_summaries.assert_any_call(
+            stock_id=1,
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+        news_repository.find_news_summaries.assert_any_call(
+            stock_id=2,
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+        assert ai_client.generate_script.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_scripts_passes_combined_news_to_ai(
+        self,
+    ) -> None:
+        # given
+        news_repository = Mock(spec=NewsRepository)
+        news_repository.find_news_summaries.return_value = [
+            FakeNewsSummary(
+                title="첫 번째 뉴스",
+                summary_content="첫 번째 뉴스 요약",
+            ),
+            FakeNewsSummary(
+                title="두 번째 뉴스",
+                summary_content="두 번째 뉴스 요약",
+            ),
+        ]
+
+        ai_client = Mock(spec=AiClient)
+        ai_client.generate_script = AsyncMock(
+            return_value="생성된 스크립트"
         )
 
         service = ScriptService(
@@ -43,60 +116,184 @@ class TestScriptService:
             ai_client=ai_client,
         )
 
+        start_at = datetime(2026, 7, 18, 0, 0)
+        end_at = datetime(2026, 7, 19, 0, 0)
+
         # when
-        result = service.generate_script(
-            stock_id=1,
-            start=start,
-            end=end,
+        result = await service.generate_scripts(
+            stock_ids=[10],
+            start_at=start_at,
+            end_at=end_at,
         )
 
         # then
-        assert result == "오늘 삼성전자 관련 주요 소식을 전해드립니다."
+        assert result == {
+            10: "생성된 스크립트",
+        }
 
-        news_repository.find_news_summaries.assert_called_once_with(
-            stock_id=1,
-            start=start,
-            end=end,
+        ai_client.generate_script.assert_awaited_once_with(
+            (
+                "종목 ID: 10\n\n"
+                "다음은 해당 종목과 관련된 뉴스 요약입니다.\n\n"
+                "[뉴스 1]\n"
+                "제목: 첫 번째 뉴스\n"
+                "요약: 첫 번째 뉴스 요약\n\n"
+                "[뉴스 2]\n"
+                "제목: 두 번째 뉴스\n"
+                "요약: 두 번째 뉴스 요약"
+            )
         )
 
-        ai_client.generate_script.assert_called_once_with(
-            "제목: 삼성전자 반도체 투자 확대\n"
-            "요약: 삼성전자가 반도체 생산시설 투자를 확대했다.\n\n"
-            "제목: 삼성전자 신제품 공개\n"
-            "요약: 삼성전자가 새로운 모바일 제품을 공개했다."
-        )
-
-    def test_generate_script_returns_empty_string_when_news_does_not_exist(
+    @pytest.mark.asyncio
+    async def test_generate_scripts_does_not_call_ai_when_news_is_empty(
         self,
     ) -> None:
         # given
-        start=datetime(2026, 7, 16,)
-        end=datetime(2026, 7, 17,)
-
         news_repository = Mock(spec=NewsRepository)
         news_repository.find_news_summaries.return_value = []
 
         ai_client = Mock(spec=AiClient)
+        ai_client.generate_script = AsyncMock()
 
         service = ScriptService(
             news_repository=news_repository,
             ai_client=ai_client,
         )
 
+        start_at = datetime(2026, 7, 18, 0, 0)
+        end_at = datetime(2026, 7, 19, 0, 0)
+
         # when
-        result = service.generate_script(
-            stock_id=1,
-            start=start,
-            end=end,
+        result = await service.generate_scripts(
+            stock_ids=[1],
+            start_at=start_at,
+            end_at=end_at,
         )
 
         # then
-        assert result == ""
+        assert result == {
+            1: "",
+        }
 
-        news_repository.find_news_summaries.assert_called_once_with(
-            stock_id=1,
-            start=start,
-            end=end,
+        ai_client.generate_script.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_generate_scripts_removes_duplicate_stock_ids(
+        self,
+    ) -> None:
+        # given
+        news_repository = Mock(spec=NewsRepository)
+        news_repository.find_news_summaries.return_value = [
+            FakeNewsSummary(
+                title="뉴스 제목",
+                summary_content="뉴스 요약",
+            )
+        ]
+
+        ai_client = Mock(spec=AiClient)
+        ai_client.generate_script = AsyncMock(
+            return_value="생성된 스크립트"
         )
 
-        ai_client.generate_script.assert_not_called()
+        service = ScriptService(
+            news_repository=news_repository,
+            ai_client=ai_client,
+        )
+
+        start_at = datetime(2026, 7, 18, 0, 0)
+        end_at = datetime(2026, 7, 19, 0, 0)
+
+        # when
+        result = await service.generate_scripts(
+            stock_ids=[1, 1, 1],
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+        # then
+        assert result == {
+            1: "생성된 스크립트",
+        }
+
+        news_repository.find_news_summaries.assert_called_once()
+        ai_client.generate_script.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_scripts_returns_empty_dict_when_stock_ids_empty(
+        self,
+    ) -> None:
+        # given
+        news_repository = Mock(spec=NewsRepository)
+
+        ai_client = Mock(spec=AiClient)
+        ai_client.generate_script = AsyncMock()
+
+        service = ScriptService(
+            news_repository=news_repository,
+            ai_client=ai_client,
+        )
+
+        start_at = datetime(2026, 7, 18, 0, 0)
+        end_at = datetime(2026, 7, 19, 0, 0)
+
+        # when
+        result = await service.generate_scripts(
+            stock_ids=[],
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+        # then
+        assert result == {}
+
+        news_repository.find_news_summaries.assert_not_called()
+        ai_client.generate_script.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_generate_scripts_raises_error_when_period_is_invalid(
+        self,
+    ) -> None:
+        # given
+        news_repository = Mock(spec=NewsRepository)
+
+        ai_client = Mock(spec=AiClient)
+        ai_client.generate_script = AsyncMock()
+
+        service = ScriptService(
+            news_repository=news_repository,
+            ai_client=ai_client,
+        )
+
+        same_time = datetime(2026, 7, 19, 0, 0)
+
+        # when & then
+        with pytest.raises(
+            ValueError,
+            match="start_at must be earlier than end_at",
+        ):
+            await service.generate_scripts(
+                stock_ids=[1],
+                start_at=same_time,
+                end_at=same_time,
+            )
+
+        news_repository.find_news_summaries.assert_not_called()
+        ai_client.generate_script.assert_not_awaited()
+
+    def test_constructor_raises_error_when_max_concurrency_is_zero(
+        self,
+    ) -> None:
+        # given
+        news_repository = Mock(spec=NewsRepository)
+        ai_client = Mock(spec=AiClient)
+
+        # when & then
+        with pytest.raises(
+            ValueError,
+            match="max_concurrency must be greater than 0",
+        ):
+            ScriptService(
+                news_repository=news_repository,
+                ai_client=ai_client,
+                max_concurrency=0,
+            )
