@@ -1,6 +1,6 @@
 CHARACTER_VOICES: dict[str, str] = {
     "코스": "tc_68d4b115f0486108a7eefb37",
-    "코미": "tc_691d49ccc47926d741f15913",
+    "코미": "tc_6731b3ac075b04a944644234",
 }
 
 

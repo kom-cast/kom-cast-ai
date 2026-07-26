@@ -1,6 +1,6 @@
-from app.audio.mixer import merge
-from app.script.models import DialogueLine
-from app.tts.synthesizer import LineAudio, WordTiming
+from tts_app.audio.mixer import merge
+from tts_app.script.models import DialogueLine
+from tts_app.tts.synthesizer import LineAudio, WordTiming
 from pydub import AudioSegment
 from pydub.generators import Sine
 

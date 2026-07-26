@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydub import AudioSegment
 
-from app.tts.synthesizer import LineAudio
+from tts_app.tts.synthesizer import LineAudio
 
 GAP_BETWEEN_LINES_MS = 400
 

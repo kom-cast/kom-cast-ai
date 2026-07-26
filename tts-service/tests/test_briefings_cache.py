@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 from pydub.generators import Sine
 
-import app.api.briefings as briefings_module
-from app.main import app
-from app.script.models import DialogueLine
-from app.tts.synthesizer import LineAudio, WordTiming
+import tts_app.api.briefings as briefings_module
+from tts_app.main import app
+from tts_app.script.models import DialogueLine
+from tts_app.tts.synthesizer import LineAudio, WordTiming
 
 
 def _fake_line_audio(speaker: str, stock: str, text: str, seconds: float = 0.5) -> LineAudio:

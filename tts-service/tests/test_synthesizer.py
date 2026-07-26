@@ -5,14 +5,14 @@ import httpx
 import pytest
 import respx
 
-from app.script.models import DialogueLine
-from app.tts.synthesizer import API_URL, synthesize_lines
+from tts_app.script.models import DialogueLine
+from tts_app.tts.synthesizer import API_URL, synthesize_lines
 
 
 @pytest.fixture(autouse=True)
 def _typecast_api_key(monkeypatch):
     monkeypatch.setenv("TYPECAST_API_KEY", "test-key")
-    from app.config import get_settings
+    from tts_app.config import get_settings
 
     get_settings.cache_clear()
     yield

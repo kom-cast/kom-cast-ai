@@ -6,9 +6,9 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from app.audio.mixer import merge
-from app.script.models import Script
-from app.tts.synthesizer import synthesize_lines
+from tts_app.audio.mixer import merge
+from tts_app.script.models import Script
+from tts_app.tts.synthesizer import synthesize_lines
 
 router = APIRouter(prefix="/briefings", tags=["briefings"])
 

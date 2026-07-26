@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.briefings import AUDIO_DIR
-from app.api.briefings import router as briefings_router
+from tts_app.api.briefings import AUDIO_DIR
+from tts_app.api.briefings import router as briefings_router
 
 app = FastAPI(title="komcast TTS service")
 app.add_middleware(

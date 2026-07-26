@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.characters import voice_for
-from app.config import get_settings
-from app.script.models import DialogueLine
+from tts_app.characters import voice_for
+from tts_app.config import get_settings
+from tts_app.script.models import DialogueLine
 
 API_URL = "https://api.typecast.ai/v1/text-to-speech/with-timestamps"
 

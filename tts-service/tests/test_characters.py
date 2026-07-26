@@ -1,6 +1,6 @@
 import pytest
 
-from app.characters import CHARACTER_VOICES, voice_for
+from tts_app.characters import CHARACTER_VOICES, voice_for
 
 
 def test_voice_for_known_speaker():
