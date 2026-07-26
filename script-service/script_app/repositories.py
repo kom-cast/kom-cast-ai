@@ -16,8 +16,10 @@ from script_app.models import (
     ScriptDocument,
     ScriptDocumentStatus,
     ScriptSection,
+    Stock,
     StockNewsSummary,
     StockScript,
+    Industry,
     UserIndustry,
     UserStock,
 )
@@ -81,6 +83,47 @@ class UserInterestRepository:
             )
 
         return targets_by_user
+
+
+class TargetRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def find_stocks(
+        self,
+        stock_codes: list[str],
+    ) -> dict[str, Stock]:
+        unique_stock_codes = list(dict.fromkeys(stock_codes))
+
+        if not unique_stock_codes:
+            return {}
+
+        stmt = select(Stock).where(
+            Stock.stock_code.in_(unique_stock_codes)
+        )
+        return {
+            stock.stock_code: stock
+            for stock in self.session.scalars(stmt)
+        }
+
+    def find_industries(
+        self,
+        industry_codes: list[str],
+    ) -> dict[str, Industry]:
+        unique_industry_codes = list(
+            dict.fromkeys(industry_codes)
+        )
+
+        if not unique_industry_codes:
+            return {}
+
+        stmt = select(Industry).where(
+            Industry.industry_code.in_(unique_industry_codes)
+        )
+        return {
+            industry.industry_code: industry
+            for industry in self.session.scalars(stmt)
+        }
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,11 @@ from script_app.models import (
     SectionTargetType,
     SectionType,
 )
-from script_app.repositories import NewsRepository, SectionRepository
+from script_app.repositories import (
+    NewsRepository,
+    SectionRepository,
+    TargetRepository,
+)
 from script_app.schemas import CommonSectionAiResponse
 from script_app.services import CommonSectionService
 
@@ -52,16 +56,21 @@ def existing_stock_section(stock_code: str) -> Section:
 
 def create_service():
     news_repository = Mock(spec=NewsRepository)
+    target_repository = Mock(spec=TargetRepository)
+    target_repository.find_stocks.return_value = {}
+    target_repository.find_industries.return_value = {}
     section_repository = Mock(spec=SectionRepository)
     ai_client = Mock(spec=AiClient)
     service = CommonSectionService(
         news_repository=news_repository,
+        target_repository=target_repository,
         section_repository=section_repository,
         ai_client=ai_client,
     )
     return (
         service,
         news_repository,
+        target_repository,
         section_repository,
         ai_client,
     )
@@ -72,6 +81,7 @@ async def test_reuses_existing_sections_without_ai_call() -> None:
     (
         service,
         news_repository,
+        target_repository,
         section_repository,
         ai_client,
     ) = create_service()
@@ -105,6 +115,7 @@ async def test_generates_and_saves_missing_common_sections() -> None:
     (
         service,
         news_repository,
+        target_repository,
         section_repository,
         ai_client,
     ) = create_service()
@@ -115,6 +126,12 @@ async def test_generates_and_saves_missing_common_sections() -> None:
     }
     news_repository.find_by_industry_codes.return_value = {
         "SEMI": [news("반도체 업종 뉴스")]
+    }
+    target_repository.find_stocks.return_value = {
+        "005930": Mock(corp_name="삼성전자")
+    }
+    target_repository.find_industries.return_value = {
+        "SEMI": Mock(industry_name="반도체")
     }
     ai_client.generate_common_section = AsyncMock(
         side_effect=[
@@ -140,6 +157,12 @@ async def test_generates_and_saves_missing_common_sections() -> None:
     assert set(result.stock_sections) == {"005930"}
     assert set(result.industry_sections) == {"SEMI"}
     assert ai_client.generate_common_section.await_count == 2
+    sources = [
+        call.args[0]
+        for call in ai_client.generate_common_section.await_args_list
+    ]
+    assert "대상 이름: 삼성전자" in sources[0]
+    assert "대상 이름: 반도체" in sources[1]
     assert (
         section_repository
         .save_common_section_with_lines_or_get
@@ -160,6 +183,7 @@ async def test_reports_targets_without_news() -> None:
     (
         service,
         news_repository,
+        target_repository,
         section_repository,
         ai_client,
     ) = create_service()
@@ -190,6 +214,7 @@ async def test_isolates_ai_failure_by_target() -> None:
     (
         service,
         news_repository,
+        target_repository,
         section_repository,
         ai_client,
     ) = create_service()
@@ -238,6 +263,7 @@ def test_common_section_service_requires_positive_concurrency() -> None:
     ):
         CommonSectionService(
             news_repository=Mock(spec=NewsRepository),
+            target_repository=Mock(spec=TargetRepository),
             section_repository=Mock(spec=SectionRepository),
             ai_client=Mock(spec=AiClient),
             max_concurrency=0,

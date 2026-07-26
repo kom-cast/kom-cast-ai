@@ -22,6 +22,7 @@ from script_app.repositories import (
     SectionLineData,
     SectionRepository,
     ScriptDocumentRepository,
+    TargetRepository,
     UserInterestRepository,
 )
 from script_app.schemas import (
@@ -542,6 +543,7 @@ class CommonSectionService:
     def __init__(
         self,
         news_repository: NewsRepository,
+        target_repository: TargetRepository,
         section_repository: SectionRepository,
         ai_client: AiClient,
         max_concurrency: int = 5,
@@ -552,6 +554,7 @@ class CommonSectionService:
             )
 
         self.news_repository = news_repository
+        self.target_repository = target_repository
         self.section_repository = section_repository
         self.ai_client = ai_client
         self.semaphore = asyncio.Semaphore(max_concurrency)
@@ -606,14 +609,24 @@ class CommonSectionService:
                 end_at=period_end,
             )
         )
+        stocks = self.target_repository.find_stocks(
+            missing_stock_codes
+        )
+        industries = self.target_repository.find_industries(
+            missing_industry_codes
+        )
 
         targets: list[
-            tuple[SectionType, str, list[NewsArticle]]
+            tuple[SectionType, str, str, list[NewsArticle]]
         ] = []
         self._collect_targets(
             section_type=SectionType.STOCK,
             codes=missing_stock_codes,
             news_by_code=news_by_stock,
+            names_by_code={
+                code: stock.corp_name
+                for code, stock in stocks.items()
+            },
             targets=targets,
             no_news_codes=result.no_news_stock_codes,
         )
@@ -621,6 +634,10 @@ class CommonSectionService:
             section_type=SectionType.INDUSTRY,
             codes=missing_industry_codes,
             news_by_code=news_by_industry,
+            names_by_code={
+                code: industry.industry_name
+                for code, industry in industries.items()
+            },
             targets=targets,
             no_news_codes=result.no_news_industry_codes,
         )
@@ -630,15 +647,21 @@ class CommonSectionService:
                 self._generate_response(
                     section_type=section_type,
                     target_code=target_code,
+                    target_name=target_name,
                     news_articles=news_articles,
                 )
-                for section_type, target_code, news_articles in targets
+                for (
+                    section_type,
+                    target_code,
+                    target_name,
+                    news_articles,
+                ) in targets
             ],
             return_exceptions=True,
         )
 
         for target, response in zip(targets, responses):
-            section_type, target_code, _ = target
+            section_type, target_code, _, _ = target
 
             if isinstance(response, Exception):
                 self._failed_codes(result, section_type).add(
@@ -663,11 +686,13 @@ class CommonSectionService:
         self,
         section_type: SectionType,
         target_code: str,
+        target_name: str,
         news_articles: list[NewsArticle],
     ) -> CommonSectionAiResponse:
         source = self._build_source(
             section_type=section_type,
             target_code=target_code,
+            target_name=target_name,
             news_articles=news_articles,
         )
 
@@ -717,8 +742,9 @@ class CommonSectionService:
         section_type: SectionType,
         codes: list[str],
         news_by_code: dict[str, list[NewsArticle]],
+        names_by_code: dict[str, str],
         targets: list[
-            tuple[SectionType, str, list[NewsArticle]]
+            tuple[SectionType, str, str, list[NewsArticle]]
         ],
         no_news_codes: set[str],
     ) -> None:
@@ -727,7 +753,12 @@ class CommonSectionService:
 
             if news_articles:
                 targets.append(
-                    (section_type, code, news_articles)
+                    (
+                        section_type,
+                        code,
+                        names_by_code.get(code, code),
+                        news_articles,
+                    )
                 )
             else:
                 no_news_codes.add(code)
@@ -736,6 +767,7 @@ class CommonSectionService:
     def _build_source(
         section_type: SectionType,
         target_code: str,
+        target_name: str,
         news_articles: list[NewsArticle],
     ) -> str:
         target_label = (
@@ -745,6 +777,7 @@ class CommonSectionService:
         )
         parts = [
             f"{target_label}: {target_code}",
+            f"대상 이름: {target_name}",
             "지정 기간의 뉴스 요약:",
         ]
 

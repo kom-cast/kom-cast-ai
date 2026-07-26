@@ -7,7 +7,10 @@ from sqlalchemy.pool import StaticPool
 
 from script_app.database import Base
 from script_app.models import Industry, Stock, UserIndustry, UserStock
-from script_app.repositories import UserInterestRepository
+from script_app.repositories import (
+    TargetRepository,
+    UserInterestRepository,
+)
 
 
 USER_ID_1 = UUID("3ad697a8-8d7d-4f80-a66f-04d994a89611")
@@ -138,3 +141,27 @@ def test_find_targets_returns_empty_result_for_empty_input(
     result = repository.find_by_user_ids([])
 
     assert result == {}
+
+
+def test_find_target_master_names(session: Session) -> None:
+    add_interest_data(session)
+    repository = TargetRepository(session)
+
+    stocks = repository.find_stocks(["005930", "000660"])
+    industries = repository.find_industries(
+        ["SEMI", "DISPLAY"]
+    )
+
+    assert stocks["005930"].corp_name == "삼성전자"
+    assert stocks["000660"].corp_name == "SK하이닉스"
+    assert industries["SEMI"].industry_name == "반도체"
+    assert industries["DISPLAY"].industry_name == "디스플레이"
+
+
+def test_target_master_lookup_handles_empty_input(
+    session: Session,
+) -> None:
+    repository = TargetRepository(session)
+
+    assert repository.find_stocks([]) == {}
+    assert repository.find_industries([]) == {}

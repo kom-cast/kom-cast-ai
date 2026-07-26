@@ -10,6 +10,7 @@ from script_app.repositories import (
     ScriptRepository,
     ScriptDocumentRepository,
     SectionRepository,
+    TargetRepository,
     UserInterestRepository,
 )
 from script_app.services import (
@@ -54,6 +55,7 @@ def create_script_generation_service(
         ),
         common_section_service=CommonSectionService(
             news_repository=news_repository,
+            target_repository=TargetRepository(session),
             section_repository=section_repository,
             ai_client=ai_client,
             max_concurrency=(
