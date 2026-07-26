@@ -610,9 +610,12 @@ class CommonSectionService:
             )
             for line in response.lines
         ]
-        return self.section_repository.save_with_lines(
-            section,
-            lines,
+        return (
+            self.section_repository
+            .save_common_section_with_lines_or_get(
+                section,
+                lines,
+            )
         )
 
     @staticmethod

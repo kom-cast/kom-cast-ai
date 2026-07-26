@@ -122,7 +122,11 @@ async def test_generates_and_saves_missing_common_sections() -> None:
             ai_response("반도체 업종 소식입니다."),
         ]
     )
-    section_repository.save_with_lines.side_effect = (
+    (
+        section_repository
+        .save_common_section_with_lines_or_get
+        .side_effect
+    ) = (
         lambda section, lines: section
     )
 
@@ -136,9 +140,17 @@ async def test_generates_and_saves_missing_common_sections() -> None:
     assert set(result.stock_sections) == {"005930"}
     assert set(result.industry_sections) == {"SEMI"}
     assert ai_client.generate_common_section.await_count == 2
-    assert section_repository.save_with_lines.call_count == 2
+    assert (
+        section_repository
+        .save_common_section_with_lines_or_get
+        .call_count
+        == 2
+    )
     saved_lines = (
-        section_repository.save_with_lines.call_args_list[0].args[1]
+        section_repository
+        .save_common_section_with_lines_or_get
+        .call_args_list[0]
+        .args[1]
     )
     assert saved_lines[0].talker == "코스"
 
@@ -194,7 +206,11 @@ async def test_isolates_ai_failure_by_target() -> None:
             ai_response("성공한 소식입니다."),
         ]
     )
-    section_repository.save_with_lines.side_effect = (
+    (
+        section_repository
+        .save_common_section_with_lines_or_get
+        .side_effect
+    ) = (
         lambda section, lines: section
     )
 
@@ -207,7 +223,12 @@ async def test_isolates_ai_failure_by_target() -> None:
 
     assert result.failed_stock_codes == {"000660"}
     assert set(result.stock_sections) == {"005930"}
-    assert section_repository.save_with_lines.call_count == 1
+    assert (
+        section_repository
+        .save_common_section_with_lines_or_get
+        .call_count
+        == 1
+    )
 
 
 def test_common_section_service_requires_positive_concurrency() -> None:

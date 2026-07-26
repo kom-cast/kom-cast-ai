@@ -110,6 +110,65 @@ def test_save_section_with_ordered_lines(session: Session) -> None:
     ]
 
 
+def test_common_section_conflict_reuses_existing_section(
+    session: Session,
+) -> None:
+    add_master_data(session)
+    repository = SectionRepository(session)
+    existing = repository.save_common_section_with_lines_or_get(
+        create_section(
+            section_type=SectionType.STOCK,
+            stock_code="005930",
+        ),
+        [
+            SectionLineData(
+                talker="코스",
+                content="먼저 저장된 발화",
+            )
+        ],
+    )
+
+    result = repository.save_common_section_with_lines_or_get(
+        create_section(
+            section_type=SectionType.STOCK,
+            stock_code="005930",
+        ),
+        [
+            SectionLineData(
+                talker="코미",
+                content="나중에 생성된 발화",
+            )
+        ],
+    )
+
+    assert result.id == existing.id
+    lines = repository.find_lines_by_section_ids([existing.id])
+    assert [line.content for line in lines[existing.id]] == [
+        "먼저 저장된 발화"
+    ]
+
+
+def test_conflict_reuse_rejects_personal_sections(
+    session: Session,
+) -> None:
+    repository = SectionRepository(session)
+    personal_section = Section(
+        section_type=SectionType.OPENING,
+        target_type=SectionTargetType.USER,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="only common sections",
+    ):
+        repository.save_common_section_with_lines_or_get(
+            personal_section,
+            [],
+        )
+
+
 def test_find_reusable_stock_sections(session: Session) -> None:
     add_master_data(session)
     repository = SectionRepository(session)

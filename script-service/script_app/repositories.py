@@ -3,6 +3,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from script_app.models import (
@@ -167,6 +168,32 @@ class SectionRepository:
 
         return section
 
+    def save_common_section_with_lines_or_get(
+        self,
+        section: Section,
+        lines: list[SectionLineData],
+    ) -> Section:
+        if section.section_type not in (
+            SectionType.STOCK,
+            SectionType.INDUSTRY,
+        ):
+            raise ValueError(
+                "only common sections support conflict reuse"
+            )
+
+        try:
+            with self.session.begin_nested():
+                return self.save_with_lines(section, lines)
+        except IntegrityError:
+            existing_section = self._find_matching_common_section(
+                section
+            )
+
+            if existing_section is None:
+                raise
+
+            return existing_section
+
     def find_lines_by_section_ids(
         self,
         section_ids: list[UUID],
@@ -193,6 +220,27 @@ class SectionRepository:
             lines_by_section[line.section_id].append(line)
 
         return lines_by_section
+
+    def _find_matching_common_section(
+        self,
+        section: Section,
+    ) -> Section | None:
+        stmt = select(Section).where(
+            Section.section_type == section.section_type,
+            Section.period_start == section.period_start,
+            Section.period_end == section.period_end,
+        )
+
+        if section.section_type == SectionType.STOCK:
+            stmt = stmt.where(
+                Section.stock_code == section.stock_code
+            )
+        else:
+            stmt = stmt.where(
+                Section.industry_code == section.industry_code
+            )
+
+        return self.session.scalar(stmt)
 
 
 class ScriptDocumentRepository:
