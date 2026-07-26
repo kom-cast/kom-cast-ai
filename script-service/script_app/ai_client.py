@@ -4,22 +4,45 @@ from openai import AsyncOpenAI
 from pathlib import Path
 
 from script_app.config import get_openai_settings
-
-
-PROMPT_PATH = (
-    Path(__file__).resolve().parent
-    / "prompts"
-    / "script_prompt.txt"
+from script_app.schemas import (
+    CommonSectionAiResponse,
+    PersonalSectionsAiResponse,
 )
 
 
-def load_prompt() -> str:
+PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+PROMPT_PATH = PROMPT_DIR / "script_prompt.txt"
+COMMON_SECTION_PROMPT_PATH = (
+    PROMPT_DIR / "common_section_prompt.txt"
+)
+PERSONAL_SECTIONS_PROMPT_PATH = (
+    PROMPT_DIR / "personal_sections_prompt.txt"
+)
+
+
+def _load_prompt(path: Path) -> str:
     try:
-        return PROMPT_PATH.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip()
     except FileNotFoundError as error:
         raise RuntimeError(
-            f"프롬프트 파일을 찾을 수 없습니다: {PROMPT_PATH}"
+            f"프롬프트 파일을 찾을 수 없습니다: {path}"
         ) from error
+
+
+def load_prompt() -> str:
+    return _load_prompt(PROMPT_PATH)
+
+
+def load_common_section_prompt() -> str:
+    return _load_prompt(COMMON_SECTION_PROMPT_PATH)
+
+
+def load_personal_sections_prompt() -> str:
+    return _load_prompt(PERSONAL_SECTIONS_PROMPT_PATH)
+
+
+class AiResponseInvalidError(ValueError):
+    pass
 
 
 class AiClient(ABC):
@@ -28,6 +51,21 @@ class AiClient(ABC):
         """
         뉴스 요약문을 전달받아 오디오 브리핑 스크립트를 생성한다.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_common_section(
+        self,
+        source: str,
+    ) -> CommonSectionAiResponse:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_personal_sections(
+        self,
+        source: str,
+        content_section_count: int,
+    ) -> PersonalSectionsAiResponse:
         raise NotImplementedError
 
 
@@ -48,6 +86,48 @@ class OpenAiClient(AiClient):
         )
 
         return response.output_text
+
+    async def generate_common_section(
+        self,
+        source: str,
+    ) -> CommonSectionAiResponse:
+        response = await self.client.responses.parse(
+            model=self.model,
+            instructions=load_common_section_prompt(),
+            input=source,
+            text_format=CommonSectionAiResponse,
+        )
+
+        if response.output_parsed is None:
+            raise AiResponseInvalidError(
+                "공통 섹션 응답을 파싱할 수 없습니다."
+            )
+
+        return response.output_parsed
+
+    async def generate_personal_sections(
+        self,
+        source: str,
+        content_section_count: int,
+    ) -> PersonalSectionsAiResponse:
+        response = await self.client.responses.parse(
+            model=self.model,
+            instructions=load_personal_sections_prompt(),
+            input=source,
+            text_format=PersonalSectionsAiResponse,
+        )
+
+        if response.output_parsed is None:
+            raise AiResponseInvalidError(
+                "사용자 섹션 응답을 파싱할 수 없습니다."
+            )
+
+        try:
+            return response.output_parsed.validate_bridge_count(
+                content_section_count
+            )
+        except ValueError as error:
+            raise AiResponseInvalidError(str(error)) from error
 
 
 def create_openai_client() -> OpenAiClient:
