@@ -12,6 +12,9 @@ from script_app.models import (
     Section,
     SectionLine,
     SectionType,
+    ScriptDocument,
+    ScriptDocumentStatus,
+    ScriptSection,
     StockNewsSummary,
     StockScript,
     UserIndustry,
@@ -190,6 +193,91 @@ class SectionRepository:
             lines_by_section[line.section_id].append(line)
 
         return lines_by_section
+
+
+class ScriptDocumentRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def find_completed_documents(
+        self,
+        user_ids: list[UUID],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, ScriptDocument]:
+        unique_user_ids = list(dict.fromkeys(user_ids))
+
+        if not unique_user_ids:
+            return {}
+
+        stmt = select(ScriptDocument).where(
+            ScriptDocument.user_id.in_(unique_user_ids),
+            ScriptDocument.period_start == period_start,
+            ScriptDocument.period_end == period_end,
+            ScriptDocument.status == ScriptDocumentStatus.COMPLETED,
+        )
+
+        return {
+            document.user_id: document
+            for document in self.session.scalars(stmt)
+        }
+
+    def create_generating_document(
+        self,
+        user_id: UUID,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> ScriptDocument:
+        document = ScriptDocument(
+            user_id=user_id,
+            period_start=period_start,
+            period_end=period_end,
+            status=ScriptDocumentStatus.GENERATING,
+        )
+        self.session.add(document)
+        self.session.flush()
+        return document
+
+    def add_sections(
+        self,
+        document: ScriptDocument,
+        sections: list[Section],
+    ) -> list[ScriptSection]:
+        script_sections = [
+            ScriptSection(
+                document_id=document.id,
+                section_id=section.id,
+                section_order=section_order,
+                section_type=section.section_type,
+            )
+            for section_order, section in enumerate(
+                sections,
+                start=1,
+            )
+        ]
+        self.session.add_all(script_sections)
+        self.session.flush()
+        return script_sections
+
+    def update_status(
+        self,
+        document: ScriptDocument,
+        status: ScriptDocumentStatus,
+    ) -> ScriptDocument:
+        document.status = status
+        self.session.flush()
+        return document
+
+    def find_sections(
+        self,
+        document_id: UUID,
+    ) -> list[ScriptSection]:
+        stmt = (
+            select(ScriptSection)
+            .where(ScriptSection.document_id == document_id)
+            .order_by(ScriptSection.section_order)
+        )
+        return list(self.session.scalars(stmt))
 
 
 class NewsRepository:
