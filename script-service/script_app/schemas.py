@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -76,3 +77,58 @@ class ScriptFailureResult(BaseModel):
 class GenerateUserScriptsResponse(BaseModel):
     scripts: list[GeneratedScriptResult]
     failures: list[ScriptFailureResult]
+
+
+class ScriptTalker(str, Enum):
+    KOS = "코스"
+    KOMI = "코미"
+
+
+class AiScriptLine(BaseModel):
+    talker: ScriptTalker
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        stripped_value = value.strip()
+
+        if not stripped_value:
+            raise ValueError("content must not be empty")
+
+        return stripped_value
+
+
+class CommonSectionAiResponse(BaseModel):
+    lines: list[AiScriptLine] = Field(min_length=1)
+
+
+BridgeLines = Annotated[
+    list[AiScriptLine],
+    Field(min_length=1),
+]
+
+
+class PersonalSectionsAiResponse(BaseModel):
+    opening: list[AiScriptLine] = Field(min_length=1)
+    bridges: list[BridgeLines]
+    closing: list[AiScriptLine] = Field(min_length=1)
+
+    def validate_bridge_count(
+        self,
+        content_section_count: int,
+    ) -> "PersonalSectionsAiResponse":
+        if content_section_count < 1:
+            raise ValueError(
+                "content_section_count must be greater than 0"
+            )
+
+        expected_bridge_count = content_section_count - 1
+
+        if len(self.bridges) != expected_bridge_count:
+            raise ValueError(
+                "bridge count must be one less than "
+                "content section count"
+            )
+
+        return self
