@@ -135,6 +135,7 @@ def create_openai_client() -> OpenAiClient:
 
     async_client = AsyncOpenAI(
         api_key=settings.api_key,
+        timeout=settings.timeout_seconds,
     )
 
     return OpenAiClient(

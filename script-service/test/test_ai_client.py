@@ -2,7 +2,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from script_app.ai_client import AiResponseInvalidError, OpenAiClient
+from script_app.ai_client import (
+    AiResponseInvalidError,
+    OpenAiClient,
+    create_openai_client,
+)
+from script_app.config import OpenAiSettings
 from script_app.schemas import (
     CommonSectionAiResponse,
     PersonalSectionsAiResponse,
@@ -10,6 +15,33 @@ from script_app.schemas import (
 
 
 class TestOpenAiClient:
+    def test_create_client_applies_request_timeout(
+        self,
+        monkeypatch,
+    ) -> None:
+        sdk_client = Mock()
+        async_openai = Mock(return_value=sdk_client)
+        monkeypatch.setattr(
+            "script_app.ai_client.AsyncOpenAI",
+            async_openai,
+        )
+        monkeypatch.setattr(
+            "script_app.ai_client.get_openai_settings",
+            lambda: OpenAiSettings(
+                api_key="test-key",
+                model="test-model",
+                timeout_seconds=45.0,
+            ),
+        )
+
+        client = create_openai_client()
+
+        async_openai.assert_called_once_with(
+            api_key="test-key",
+            timeout=45.0,
+        )
+        assert client.client is sdk_client
+
     @pytest.mark.asyncio
     async def test_generate_script_calls_openai_responses_api(
         self, monkeypatch
