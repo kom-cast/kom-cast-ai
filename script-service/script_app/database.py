@@ -22,6 +22,6 @@ SessionFactory = sessionmaker(
 Base = declarative_base()
 
 def create_tables() -> None:
-    import models  # noqa: F401
+    from script_app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
