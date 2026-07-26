@@ -286,7 +286,6 @@ def create_stock_section(session) -> Section:
             23,
             tzinfo=timezone.utc,
         ),
-        prompt_version="v1",
     )
     session.add(section)
     session.commit()
@@ -352,7 +351,6 @@ def test_duplicate_stock_section_reuse_key_is_rejected(session) -> None:
             industry_code=None,
             period_start=first_section.period_start,
             period_end=first_section.period_end,
-            prompt_version=first_section.prompt_version,
         )
     )
 
@@ -382,7 +380,6 @@ def test_section_target_columns_must_match_section_type(session) -> None:
                 23,
                 tzinfo=timezone.utc,
             ),
-            prompt_version="v1",
         )
     )
 

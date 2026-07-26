@@ -18,7 +18,6 @@ from script_app.repositories import SectionLineData, SectionRepository
 
 PERIOD_START = datetime(2026, 7, 22, tzinfo=timezone.utc)
 PERIOD_END = datetime(2026, 7, 23, tzinfo=timezone.utc)
-PROMPT_VERSION = "v1"
 
 
 @pytest.fixture
@@ -64,7 +63,6 @@ def create_section(
     section_type: SectionType,
     stock_code: str | None = None,
     industry_code: str | None = None,
-    prompt_version: str = PROMPT_VERSION,
 ) -> Section:
     target_type = (
         SectionTargetType.STOCK
@@ -78,7 +76,6 @@ def create_section(
         industry_code=industry_code,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        prompt_version=prompt_version,
     )
 
 
@@ -123,20 +120,10 @@ def test_find_reusable_stock_sections(session: Session) -> None:
         ),
         [],
     )
-    repository.save_with_lines(
-        create_section(
-            section_type=SectionType.STOCK,
-            stock_code="005930",
-            prompt_version="old",
-        ),
-        [],
-    )
-
     result = repository.find_stock_sections(
         ["005930", "000660"],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        prompt_version=PROMPT_VERSION,
     )
 
     assert result == {"005930": reusable}
@@ -157,7 +144,6 @@ def test_find_reusable_industry_sections(session: Session) -> None:
         ["SEMI", "DISPLAY"],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        prompt_version=PROMPT_VERSION,
     )
 
     assert result == {"SEMI": reusable}
@@ -172,12 +158,10 @@ def test_section_repository_handles_empty_inputs(
         [],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        prompt_version=PROMPT_VERSION,
     ) == {}
     assert repository.find_industry_sections(
         [],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        prompt_version=PROMPT_VERSION,
     ) == {}
     assert repository.find_lines_by_section_ids([]) == {}

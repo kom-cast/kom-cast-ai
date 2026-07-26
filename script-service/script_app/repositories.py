@@ -94,7 +94,6 @@ class SectionRepository:
         stock_codes: list[str],
         period_start: datetime,
         period_end: datetime,
-        prompt_version: str,
     ) -> dict[str, Section]:
         unique_stock_codes = list(dict.fromkeys(stock_codes))
 
@@ -106,7 +105,6 @@ class SectionRepository:
             Section.stock_code.in_(unique_stock_codes),
             Section.period_start == period_start,
             Section.period_end == period_end,
-            Section.prompt_version == prompt_version,
         )
 
         sections = self.session.scalars(stmt)
@@ -121,7 +119,6 @@ class SectionRepository:
         industry_codes: list[str],
         period_start: datetime,
         period_end: datetime,
-        prompt_version: str,
     ) -> dict[str, Section]:
         unique_industry_codes = list(
             dict.fromkeys(industry_codes)
@@ -135,7 +132,6 @@ class SectionRepository:
             Section.industry_code.in_(unique_industry_codes),
             Section.period_start == period_start,
             Section.period_end == period_end,
-            Section.prompt_version == prompt_version,
         )
 
         sections = self.session.scalars(stmt)

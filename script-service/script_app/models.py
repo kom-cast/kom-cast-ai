@@ -270,11 +270,6 @@ class Section(Base):
         nullable=False,
     )
 
-    prompt_version: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-    )
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -306,7 +301,6 @@ class Section(Base):
             "stock_code",
             "period_start",
             "period_end",
-            "prompt_version",
             unique=True,
             postgresql_where=text("section_type = 'STOCK'"),
             sqlite_where=text("section_type = 'STOCK'"),
@@ -316,7 +310,6 @@ class Section(Base):
             "industry_code",
             "period_start",
             "period_end",
-            "prompt_version",
             unique=True,
             postgresql_where=text("section_type = 'INDUSTRY'"),
             sqlite_where=text("section_type = 'INDUSTRY'"),
