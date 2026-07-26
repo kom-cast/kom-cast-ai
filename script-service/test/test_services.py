@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.ai_client import AiClient
-from app.models import StockScript
-from app.repositories import NewsRepository, ScriptRepository
-from app.services import ScriptService
+from script_app.ai_client import AiClient
+from script_app.models import StockScript
+from script_app.repositories import NewsRepository, ScriptRepository
+from script_app.services import ScriptService
 
 
 @dataclass

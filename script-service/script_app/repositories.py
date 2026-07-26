@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import StockNewsSummary, StockScript
+from script_app.models import StockNewsSummary, StockScript
 
 class NewsRepository:
 

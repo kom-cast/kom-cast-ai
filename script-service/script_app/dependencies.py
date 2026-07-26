@@ -2,13 +2,13 @@
 
 from sqlalchemy.orm import Session
 
-from app.ai_client import create_openai_client
-from app.database import SessionFactory
-from app.repositories import (
+from script_app.ai_client import create_openai_client
+from script_app.database import SessionFactory
+from script_app.repositories import (
     NewsRepository,
     ScriptRepository,
 )
-from app.services import ScriptService
+from script_app.services import ScriptService
 
 
 def get_session():

@@ -1,6 +1,6 @@
 import asyncio
 
-from app.ai_client import create_openai_client
+from script_app.ai_client import create_openai_client
 
 
 async def main() -> None:

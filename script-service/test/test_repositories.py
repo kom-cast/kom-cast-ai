@@ -5,9 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base
-from app.models import StockNewsSummary
-from app.repositories import NewsRepository
+from script_app.database import Base
+from script_app.models import StockNewsSummary
+from script_app.repositories import NewsRepository
 
 
 @pytest.fixture

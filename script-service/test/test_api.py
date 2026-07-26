@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from script_app.main import app
 
 
 client = TestClient(app)
@@ -32,7 +32,7 @@ def test_generate_scripts(monkeypatch) -> None:
         return fake_service
 
     monkeypatch.setattr(
-        "app.main.create_script_service",
+        "script_app.main.create_script_service",
         fake_create_script_service,
     )
 

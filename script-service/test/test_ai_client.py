@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.ai_client import (
+from script_app.ai_client import (
     SCRIPT_INSTRUCTIONS,
     OpenAiClient,
 )

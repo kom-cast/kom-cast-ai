@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Depends
 
 from sqlalchemy.orm import Session
-from app.schemas import (
+from script_app.schemas import (
     GenerateScriptsRequest,
     GenerateScriptsResponse,
 )
-from app.dependencies import (
+from script_app.dependencies import (
     create_script_service,
     get_session,
 )

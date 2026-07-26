@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from openai import AsyncOpenAI
 from pathlib import Path
 
-from app.config import get_openai_settings
+from script_app.config import get_openai_settings
 
 
 PROMPT_PATH = (

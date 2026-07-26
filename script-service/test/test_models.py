@@ -6,8 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base
-from app.models import StockNewsSummary, StockScript
+from script_app.database import Base
+from script_app.models import StockNewsSummary, StockScript
 
 
 @pytest.fixture
