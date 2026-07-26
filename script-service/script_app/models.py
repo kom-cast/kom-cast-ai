@@ -363,6 +363,111 @@ class SectionLine(Base):
     )
 
 
+class ScriptDocumentStatus(str, Enum):
+    GENERATING = "GENERATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class ScriptDocument(Base):
+    __tablename__ = "script_documents"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        nullable=False,
+    )
+
+    period_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    period_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    status: Mapped[ScriptDocumentStatus] = mapped_column(
+        SqlEnum(
+            ScriptDocumentStatus,
+            native_enum=False,
+            length=30,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "period_start",
+            "period_end",
+            name="uq_script_document_user_period",
+        ),
+    )
+
+
+class ScriptSection(Base):
+    __tablename__ = "script_sections"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    document_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("script_documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    section_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("sections.id"),
+        nullable=False,
+    )
+
+    section_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    section_type: Mapped[SectionType] = mapped_column(
+        SqlEnum(
+            SectionType,
+            native_enum=False,
+            length=30,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "section_order >= 1",
+            name="ck_script_section_order_positive",
+        ),
+        UniqueConstraint(
+            "document_id",
+            "section_order",
+            name="uq_script_section_order",
+        ),
+    )
+
+
 class StockNewsSummary(Base):
     __tablename__ = "stock_news_summaries"
 

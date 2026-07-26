@@ -17,6 +17,9 @@ from script_app.models import (
     SectionLine,
     SectionTargetType,
     SectionType,
+    ScriptDocument,
+    ScriptDocumentStatus,
+    ScriptSection,
     Stock,
     StockNewsSummary,
     StockScript,
@@ -69,6 +72,8 @@ def test_tables_are_created() -> None:
     assert "news_industry_mappings" in table_names
     assert "sections" in table_names
     assert "section_lines" in table_names
+    assert "script_documents" in table_names
+    assert "script_sections" in table_names
     assert "stock_news_summaries" in table_names
     assert "stock_scripts" in table_names
 
@@ -378,6 +383,109 @@ def test_section_target_columns_must_match_section_type(session) -> None:
                 tzinfo=timezone.utc,
             ),
             prompt_version="v1",
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def create_script_document(session) -> ScriptDocument:
+    document = ScriptDocument(
+        user_id=USER_ID,
+        period_start=datetime(
+            2026,
+            7,
+            22,
+            tzinfo=timezone.utc,
+        ),
+        period_end=datetime(
+            2026,
+            7,
+            23,
+            tzinfo=timezone.utc,
+        ),
+        status=ScriptDocumentStatus.GENERATING,
+    )
+    session.add(document)
+    session.commit()
+    return document
+
+
+def test_save_script_document_and_ordered_sections(session) -> None:
+    document = create_script_document(session)
+    section = create_stock_section(session)
+    script_section = ScriptSection(
+        document_id=document.id,
+        section_id=section.id,
+        section_order=1,
+        section_type=SectionType.STOCK,
+    )
+
+    session.add(script_section)
+    document.status = ScriptDocumentStatus.COMPLETED
+    session.commit()
+
+    assert document.id is not None
+    assert document.status == ScriptDocumentStatus.COMPLETED
+    assert script_section.id is not None
+    assert script_section.section_order == 1
+
+
+def test_duplicate_script_document_period_is_rejected(session) -> None:
+    first_document = create_script_document(session)
+    session.add(
+        ScriptDocument(
+            user_id=first_document.user_id,
+            period_start=first_document.period_start,
+            period_end=first_document.period_end,
+            status=ScriptDocumentStatus.GENERATING,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_duplicate_script_section_order_is_rejected(session) -> None:
+    document = create_script_document(session)
+    section = create_stock_section(session)
+    session.add_all(
+        [
+            ScriptSection(
+                document_id=document.id,
+                section_id=section.id,
+                section_order=1,
+                section_type=SectionType.STOCK,
+            ),
+            ScriptSection(
+                document_id=document.id,
+                section_id=section.id,
+                section_order=1,
+                section_type=SectionType.STOCK,
+            ),
+        ]
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_script_section_order_must_be_positive(session) -> None:
+    document = create_script_document(session)
+    section = create_stock_section(session)
+    session.add(
+        ScriptSection(
+            document_id=document.id,
+            section_id=section.id,
+            section_order=0,
+            section_type=SectionType.STOCK,
         )
     )
 
