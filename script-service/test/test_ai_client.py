@@ -2,18 +2,21 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from script_app.ai_client import (
-    SCRIPT_INSTRUCTIONS,
-    OpenAiClient,
-)
+from script_app.ai_client import OpenAiClient
 
 
 class TestOpenAiClient:
     @pytest.mark.asyncio
     async def test_generate_script_calls_openai_responses_api(
-        self,
+        self, monkeypatch
     ) -> None:
         # given
+        fake_instructions = "가짜 프롬프트 지침"
+        monkeypatch.setattr(
+            "script_app.ai_client.load_prompt",
+            lambda: fake_instructions,
+        )
+
         sdk_client = Mock()
 
         sdk_response = Mock()
@@ -47,6 +50,6 @@ class TestOpenAiClient:
 
         sdk_client.responses.create.assert_awaited_once_with(
             model="test-model",
-            instructions=SCRIPT_INSTRUCTIONS,
+            instructions=fake_instructions,
             input=source,
         )
