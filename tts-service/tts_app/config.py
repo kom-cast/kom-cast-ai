@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TYPECAST_", env_file=".env")
+    model_config = SettingsConfigDict(
+        env_prefix="TYPECAST_", env_file=".env", extra="ignore"
+    )
 
     api_key: str
 
