@@ -32,7 +32,7 @@ def test_generate_scripts(monkeypatch) -> None:
         return fake_service
 
     monkeypatch.setattr(
-        "script_app.main.create_script_service",
+        "script_app.api.scripts.create_script_service",
         fake_create_script_service,
     )
 
