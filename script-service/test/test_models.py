@@ -13,6 +13,10 @@ from script_app.models import (
     NewsArticle,
     NewsIndustryMapping,
     NewsStockMapping,
+    Section,
+    SectionLine,
+    SectionTargetType,
+    SectionType,
     Stock,
     StockNewsSummary,
     StockScript,
@@ -63,6 +67,8 @@ def test_tables_are_created() -> None:
     assert "news_articles" in table_names
     assert "news_stock_mappings" in table_names
     assert "news_industry_mappings" in table_names
+    assert "sections" in table_names
+    assert "section_lines" in table_names
     assert "stock_news_summaries" in table_names
     assert "stock_scripts" in table_names
 
@@ -247,6 +253,131 @@ def test_duplicate_news_industry_mapping_is_rejected(session) -> None:
         NewsIndustryMapping(
             news_id=news_article.id,
             industry_code="SEMI",
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def create_stock_section(session) -> Section:
+    add_stock_master_data(session)
+    section = Section(
+        section_type=SectionType.STOCK,
+        target_type=SectionTargetType.STOCK,
+        stock_code="005930",
+        industry_code=None,
+        period_start=datetime(
+            2026,
+            7,
+            22,
+            tzinfo=timezone.utc,
+        ),
+        period_end=datetime(
+            2026,
+            7,
+            23,
+            tzinfo=timezone.utc,
+        ),
+        prompt_version="v1",
+    )
+    session.add(section)
+    session.commit()
+    return section
+
+
+def test_save_section_and_lines(session) -> None:
+    section = create_stock_section(session)
+    lines = [
+        SectionLine(
+            section_id=section.id,
+            line_order=1,
+            talker="코스",
+            content="오늘 살펴볼 종목은 삼성전자입니다.",
+        ),
+        SectionLine(
+            section_id=section.id,
+            line_order=2,
+            talker="코미",
+            content="주요 뉴스부터 살펴보겠습니다.",
+        ),
+    ]
+
+    session.add_all(lines)
+    session.commit()
+
+    assert section.id is not None
+    assert [line.line_order for line in lines] == [1, 2]
+
+
+def test_duplicate_section_line_order_is_rejected(session) -> None:
+    section = create_stock_section(session)
+    session.add_all(
+        [
+            SectionLine(
+                section_id=section.id,
+                line_order=1,
+                talker="코스",
+                content="첫 번째 발화",
+            ),
+            SectionLine(
+                section_id=section.id,
+                line_order=1,
+                talker="코미",
+                content="중복 순서 발화",
+            ),
+        ]
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_duplicate_stock_section_reuse_key_is_rejected(session) -> None:
+    first_section = create_stock_section(session)
+    session.add(
+        Section(
+            section_type=SectionType.STOCK,
+            target_type=SectionTargetType.STOCK,
+            stock_code=first_section.stock_code,
+            industry_code=None,
+            period_start=first_section.period_start,
+            period_end=first_section.period_end,
+            prompt_version=first_section.prompt_version,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_section_target_columns_must_match_section_type(session) -> None:
+    add_stock_master_data(session)
+    session.add(
+        Section(
+            section_type=SectionType.STOCK,
+            target_type=SectionTargetType.INDUSTRY,
+            stock_code="005930",
+            industry_code=None,
+            period_start=datetime(
+                2026,
+                7,
+                22,
+                tzinfo=timezone.utc,
+            ),
+            period_end=datetime(
+                2026,
+                7,
+                23,
+                tzinfo=timezone.utc,
+            ),
+            prompt_version="v1",
         )
     )
 

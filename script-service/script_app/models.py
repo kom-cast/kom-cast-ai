@@ -1,9 +1,12 @@
 from datetime import date, datetime, timezone
+from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    CheckConstraint,
     Date,
     DateTime,
+    Enum as SqlEnum,
     ForeignKey,
     Index,
     Integer,
@@ -11,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -198,6 +202,164 @@ class NewsIndustryMapping(Base):
         String(50),
         ForeignKey("industries.industry_code"),
         primary_key=True,
+    )
+
+
+class SectionType(str, Enum):
+    STOCK = "STOCK"
+    INDUSTRY = "INDUSTRY"
+    OPENING = "OPENING"
+    BRIDGE = "BRIDGE"
+    CLOSING = "CLOSING"
+
+
+class SectionTargetType(str, Enum):
+    STOCK = "STOCK"
+    INDUSTRY = "INDUSTRY"
+    USER = "USER"
+
+
+class Section(Base):
+    __tablename__ = "sections"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    section_type: Mapped[SectionType] = mapped_column(
+        SqlEnum(
+            SectionType,
+            native_enum=False,
+            length=30,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+
+    target_type: Mapped[SectionTargetType] = mapped_column(
+        SqlEnum(
+            SectionTargetType,
+            native_enum=False,
+            length=30,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+
+    stock_code: Mapped[str | None] = mapped_column(
+        String(20),
+        ForeignKey("stocks.stock_code"),
+        nullable=True,
+    )
+
+    industry_code: Mapped[str | None] = mapped_column(
+        String(50),
+        ForeignKey("industries.industry_code"),
+        nullable=True,
+    )
+
+    period_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    period_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    prompt_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "("
+            "section_type = 'STOCK' "
+            "AND target_type = 'STOCK' "
+            "AND stock_code IS NOT NULL "
+            "AND industry_code IS NULL"
+            ") OR ("
+            "section_type = 'INDUSTRY' "
+            "AND target_type = 'INDUSTRY' "
+            "AND stock_code IS NULL "
+            "AND industry_code IS NOT NULL"
+            ") OR ("
+            "section_type IN ('OPENING', 'BRIDGE', 'CLOSING') "
+            "AND target_type = 'USER' "
+            "AND stock_code IS NULL "
+            "AND industry_code IS NULL"
+            ")",
+            name="ck_section_target",
+        ),
+        Index(
+            "uq_sections_stock_reuse",
+            "stock_code",
+            "period_start",
+            "period_end",
+            "prompt_version",
+            unique=True,
+            postgresql_where=text("section_type = 'STOCK'"),
+            sqlite_where=text("section_type = 'STOCK'"),
+        ),
+        Index(
+            "uq_sections_industry_reuse",
+            "industry_code",
+            "period_start",
+            "period_end",
+            "prompt_version",
+            unique=True,
+            postgresql_where=text("section_type = 'INDUSTRY'"),
+            sqlite_where=text("section_type = 'INDUSTRY'"),
+        ),
+    )
+
+
+class SectionLine(Base):
+    __tablename__ = "section_lines"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    section_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("sections.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    line_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    talker: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "section_id",
+            "line_order",
+            name="uq_section_line_order",
+        ),
     )
 
 
