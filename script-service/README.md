@@ -1,5 +1,7 @@
 ## OpenAI 프롬프트 테스트
 
+> `tts-service`와 함께 저장소 루트의 통합 FastAPI 앱(단일 프로세스, [`main.py`](../main.py))으로 묶여서 실행됩니다. 서버 실행 방법은 [루트 README](../README.md)를 참고하세요. 아래는 script 도메인 패키지(`script_app`)의 프롬프트를 단독으로 점검하는 방법입니다.
+
 `scripts/check_openai_connection.py`를 실행하면 실제 OpenAI API를 호출하여 현재 설정된 프롬프트와 API 연결 상태를 확인할 수 있습니다.
 
 > 이 테스트는 실제 OpenAI API를 호출하므로 API 사용량과 비용이 발생할 수 있습니다.
@@ -81,7 +83,7 @@ python -m pip install -r requirements.txt
 
 ```text
 script-service/
-├── app/
+├── script_app/
 ├── scripts/
 ├── test/
 ├── .env
@@ -100,7 +102,7 @@ OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-5-mini
 ```
 
-실제 환경변수 이름은 `app/config.py`의 `OpenAiSettings` 설정과 동일해야 합니다.
+실제 환경변수 이름은 `script_app/config.py`의 `OpenAiSettings` 설정과 동일해야 합니다.
 
 보안을 위해 `.env` 파일은 GitHub에 커밋하지 않습니다. `.gitignore`에 다음 항목이 포함되어 있는지 확인합니다.
 
@@ -127,13 +129,13 @@ py -m scripts.check_openai_connection
 
 ### 실행 위치 주의
 
-명령어는 반드시 `app`, `scripts` 디렉터리가 존재하는 프로젝트 루트에서 실행해야 합니다.
+명령어는 반드시 `script_app`, `scripts` 디렉터리가 존재하는 프로젝트 루트에서 실행해야 합니다.
 
 올바른 위치:
 
 ```text
 script-service/
-├── app/
+├── script_app/
 ├── scripts/
 └── ...
 ```
@@ -155,7 +157,7 @@ python check_openai_connection.py
 `python -m` 방식은 프로젝트 루트를 Python 모듈 탐색 경로에 포함하므로 다음과 같은 프로젝트 내부 import를 정상적으로 처리할 수 있습니다.
 
 ```python
-from app.ai_client import create_openai_client
+from script_app.ai_client import create_openai_client
 ```
 
 ### 테스트 종료 후 가상환경 비활성화
