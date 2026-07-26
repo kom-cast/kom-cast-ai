@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
 
 from fastapi import APIRouter
 
-from tts_app.audio.mixer import merge
+from tts_app.audio.mixer import BriefingManifest, merge
 from tts_app.script.models import Script
-from tts_app.tts.synthesizer import synthesize_lines
+from tts_app.tts.synthesizer import LineAudio, synthesize_lines
 
 router = APIRouter(prefix="/briefings", tags=["briefings"])
 
@@ -27,6 +28,12 @@ def _cache_key(script: Script) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def _mix_and_export(line_audios: list[LineAudio], audio_path: Path) -> BriefingManifest:
+    combined, manifest = merge(line_audios)
+    combined.export(audio_path, format="mp3")
+    return manifest
+
+
 @router.post("")
 async def create_briefing(script: Script) -> dict:
     cache_key = _cache_key(script)
@@ -37,8 +44,9 @@ async def create_briefing(script: Script) -> dict:
         return json.loads(manifest_path.read_text())
 
     line_audios = await synthesize_lines(script.lines)
-    combined, manifest = merge(line_audios)
-    combined.export(audio_path, format="mp3")
+    # merge()/.export()는 동기 CPU/IO 작업(pydub)이라, 한 프로세스에서 다른 요청의
+    # 이벤트루프를 막지 않도록 스레드풀에서 실행한다.
+    manifest = await asyncio.to_thread(_mix_and_export, line_audios, audio_path)
 
     response = {
         "audioUrl": f"/static/audio/{cache_key}.mp3",
