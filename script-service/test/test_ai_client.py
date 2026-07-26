@@ -8,7 +8,7 @@ from script_app.ai_client import (
     OpenAiClient,
     create_openai_client,
 )
-from script_app.config import OpenAiSettings
+from script_app.config import ModelSettings, OpenAiSettings
 from script_app.schemas import (
     CommonSectionAiResponse,
     PersonalSectionsAiResponse,
@@ -16,6 +16,16 @@ from script_app.schemas import (
 
 
 class TestOpenAiClient:
+    @staticmethod
+    def create_test_client(sdk_client: Mock) -> OpenAiClient:
+        return OpenAiClient(
+            client=sdk_client,
+            common_model="common-model",
+            common_reasoning_effort="medium",
+            personal_model="personal-model",
+            personal_reasoning_effort="none",
+        )
+
     def test_create_client_applies_request_timeout(
         self,
         monkeypatch,
@@ -28,10 +38,17 @@ class TestOpenAiClient:
         )
         monkeypatch.setattr(
             "script_app.ai_client.get_openai_settings",
-            lambda: OpenAiSettings(
+            lambda profile="production": OpenAiSettings(
                 api_key="test-key",
-                model="test-model",
                 timeout_seconds=45.0,
+                common=ModelSettings(
+                    model="common-model",
+                    reasoning_effort="medium",
+                ),
+                personal=ModelSettings(
+                    model="personal-model",
+                    reasoning_effort="none",
+                ),
             ),
         )
 
@@ -42,6 +59,8 @@ class TestOpenAiClient:
             timeout=45.0,
         )
         assert client.client is sdk_client
+        assert client.common_model == "common-model"
+        assert client.personal_model == "personal-model"
 
     @pytest.mark.asyncio
     async def test_generate_common_section_uses_structured_output(
@@ -65,10 +84,7 @@ class TestOpenAiClient:
         sdk_client.responses.parse = AsyncMock(
             return_value=sdk_response
         )
-        ai_client = OpenAiClient(
-            client=sdk_client,
-            model="test-model",
-        )
+        ai_client = self.create_test_client(sdk_client)
 
         result = await ai_client.generate_common_section(
             "공통 섹션 입력"
@@ -76,7 +92,8 @@ class TestOpenAiClient:
 
         assert result is parsed_response
         sdk_client.responses.parse.assert_awaited_once_with(
-            model="test-model",
+            model="common-model",
+            reasoning={"effort": "medium"},
             instructions="공통 섹션 프롬프트",
             input="공통 섹션 입력",
             text_format=CommonSectionAiResponse,
@@ -118,10 +135,7 @@ class TestOpenAiClient:
         sdk_client.responses.parse = AsyncMock(
             return_value=sdk_response
         )
-        ai_client = OpenAiClient(
-            client=sdk_client,
-            model="test-model",
-        )
+        ai_client = self.create_test_client(sdk_client)
 
         result = await ai_client.generate_personal_sections(
             "사용자 섹션 입력",
@@ -130,7 +144,8 @@ class TestOpenAiClient:
 
         assert result is parsed_response
         sdk_client.responses.parse.assert_awaited_once_with(
-            model="test-model",
+            model="personal-model",
+            reasoning={"effort": "none"},
             instructions="사용자 섹션 프롬프트",
             input="사용자 섹션 입력",
             text_format=PersonalSectionsAiResponse,
@@ -144,10 +159,7 @@ class TestOpenAiClient:
         sdk_client.responses.parse = AsyncMock(
             return_value=Mock(output_parsed=None)
         )
-        ai_client = OpenAiClient(
-            client=sdk_client,
-            model="test-model",
-        )
+        ai_client = self.create_test_client(sdk_client)
 
         with pytest.raises(AiResponseInvalidError):
             await ai_client.generate_common_section("입력")
@@ -163,10 +175,7 @@ class TestOpenAiClient:
         sdk_client.responses.parse = AsyncMock(
             side_effect=error_info.value
         )
-        ai_client = OpenAiClient(
-            client=sdk_client,
-            model="test-model",
-        )
+        ai_client = self.create_test_client(sdk_client)
 
         with pytest.raises(
             AiResponseInvalidError,
@@ -197,10 +206,7 @@ class TestOpenAiClient:
         sdk_client.responses.parse = AsyncMock(
             return_value=Mock(output_parsed=parsed_response)
         )
-        ai_client = OpenAiClient(
-            client=sdk_client,
-            model="test-model",
-        )
+        ai_client = self.create_test_client(sdk_client)
 
         with pytest.raises(
             AiResponseInvalidError,

@@ -62,10 +62,18 @@ class OpenAiClient(AiClient):
     def __init__(
         self,
         client: AsyncOpenAI,
-        model: str,
+        common_model: str,
+        common_reasoning_effort: str,
+        personal_model: str,
+        personal_reasoning_effort: str,
     ) -> None:
         self.client = client
-        self.model = model
+        self.common_model = common_model
+        self.common_reasoning_effort = common_reasoning_effort
+        self.personal_model = personal_model
+        self.personal_reasoning_effort = (
+            personal_reasoning_effort
+        )
 
     async def generate_common_section(
         self,
@@ -73,7 +81,10 @@ class OpenAiClient(AiClient):
     ) -> CommonSectionAiResponse:
         try:
             response = await self.client.responses.parse(
-                model=self.model,
+                model=self.common_model,
+                reasoning={
+                    "effort": self.common_reasoning_effort,
+                },
                 instructions=load_common_section_prompt(),
                 input=source,
                 text_format=CommonSectionAiResponse,
@@ -100,7 +111,10 @@ class OpenAiClient(AiClient):
     ) -> PersonalSectionsAiResponse:
         try:
             response = await self.client.responses.parse(
-                model=self.model,
+                model=self.personal_model,
+                reasoning={
+                    "effort": self.personal_reasoning_effort,
+                },
                 instructions=load_personal_sections_prompt(),
                 input=source,
                 text_format=PersonalSectionsAiResponse,
@@ -126,8 +140,10 @@ class OpenAiClient(AiClient):
             raise AiResponseInvalidError(str(error)) from error
 
 
-def create_openai_client() -> OpenAiClient:
-    settings = get_openai_settings()
+def create_openai_client(
+    profile: str = "production",
+) -> OpenAiClient:
+    settings = get_openai_settings(profile=profile)
 
     async_client = AsyncOpenAI(
         api_key=settings.api_key,
@@ -136,5 +152,12 @@ def create_openai_client() -> OpenAiClient:
 
     return OpenAiClient(
         client=async_client,
-        model=settings.model,
+        common_model=settings.common.model,
+        common_reasoning_effort=(
+            settings.common.reasoning_effort
+        ),
+        personal_model=settings.personal.model,
+        personal_reasoning_effort=(
+            settings.personal.reasoning_effort
+        ),
     )

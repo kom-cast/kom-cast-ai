@@ -156,7 +156,7 @@ async def generate_sample_briefing(
 
 
 async def main() -> None:
-    ai_client = create_openai_client()
+    ai_client = create_openai_client(profile="check")
     briefing_lines = await generate_sample_briefing(ai_client)
 
     print("=== 맞춤형 브리핑 생성 결과 ===")

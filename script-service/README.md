@@ -105,7 +105,12 @@ GET /health
 ```env
 DATABASE_URL=sqlite:///./kom_cast.db
 OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-5-mini
+OPENAI_COMMON_MODEL=gpt-5.6-terra
+OPENAI_COMMON_REASONING_EFFORT=medium
+OPENAI_PERSONAL_MODEL=gpt-5.6-luna
+OPENAI_PERSONAL_REASONING_EFFORT=none
+OPENAI_CHECK_MODEL=gpt-5.6-luna
+OPENAI_CHECK_REASONING_EFFORT=none
 OPENAI_TIMEOUT_SECONDS=300
 SCRIPT_AI_MAX_CONCURRENCY=5
 ```
@@ -114,7 +119,12 @@ SCRIPT_AI_MAX_CONCURRENCY=5
 |---|---|
 | `DATABASE_URL` | SQLAlchemy DB 연결 주소 |
 | `OPENAI_API_KEY` | OpenAI API 키 |
-| `OPENAI_MODEL` | 스크립트 생성 모델 |
+| `OPENAI_COMMON_MODEL` | 공통 섹션 생성 모델 |
+| `OPENAI_COMMON_REASONING_EFFORT` | 공통 섹션 추론 수준 |
+| `OPENAI_PERSONAL_MODEL` | 개인 섹션 생성 모델 |
+| `OPENAI_PERSONAL_REASONING_EFFORT` | 개인 섹션 추론 수준 |
+| `OPENAI_CHECK_MODEL` | OpenAI 연결 확인 스크립트 전용 모델 |
+| `OPENAI_CHECK_REASONING_EFFORT` | OpenAI 연결 확인 스크립트 추론 수준 |
 | `OPENAI_TIMEOUT_SECONDS` | OpenAI 요청 제한 시간. 기본 300초 |
 | `SCRIPT_AI_MAX_CONCURRENCY` | 공통 섹션 동시 생성 수. 기본 5 |
 
@@ -162,7 +172,10 @@ python -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m scripts.check_openai_connection
 ```
 
-이 명령은 실제 OpenAI API를 호출하므로 API 사용량과 비용이 발생합니다. 정상적으로 실행되면 구조화된 공통 섹션 발화가 화자와 함께 출력됩니다.
+이 명령은 실제 OpenAI API를 호출하므로 API 사용량과 비용이 발생합니다.
+연결 확인 중에는 공통·개인 섹션 모두 `OPENAI_CHECK_MODEL`과
+`OPENAI_CHECK_REASONING_EFFORT`를 사용합니다. 정상적으로 실행되면 관심 업종
+1개와 관심 종목 2개로 구성된 맞춤형 브리핑이 출력됩니다.
 
 ## DB 전제조건
 

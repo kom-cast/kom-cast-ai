@@ -19,7 +19,6 @@ def test_generation_settings_use_defaults(monkeypatch) -> None:
 
 def test_openai_timeout_uses_default(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_MODEL", "test-model")
     monkeypatch.delenv("OPENAI_TIMEOUT_SECONDS", raising=False)
 
     settings = get_openai_settings()
@@ -37,7 +36,6 @@ def test_generation_settings_read_environment(monkeypatch) -> None:
 
 def test_openai_timeout_reads_environment(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_MODEL", "test-model")
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "45.5")
 
     settings = get_openai_settings()
@@ -65,7 +63,6 @@ def test_openai_settings_reject_invalid_timeout(
     value: str,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_MODEL", "test-model")
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", value)
 
     with pytest.raises(
@@ -73,3 +70,83 @@ def test_openai_settings_reject_invalid_timeout(
         match="must be a positive number",
     ):
         get_openai_settings()
+
+
+def test_production_profile_uses_task_specific_defaults(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    for name in (
+        "OPENAI_COMMON_MODEL",
+        "OPENAI_COMMON_REASONING_EFFORT",
+        "OPENAI_PERSONAL_MODEL",
+        "OPENAI_PERSONAL_REASONING_EFFORT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = get_openai_settings()
+
+    assert settings.common.model == "gpt-5.6-terra"
+    assert settings.common.reasoning_effort == "medium"
+    assert settings.personal.model == "gpt-5.6-luna"
+    assert settings.personal.reasoning_effort == "none"
+
+
+def test_check_profile_uses_lightweight_model_for_all_tasks(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_CHECK_MODEL", raising=False)
+    monkeypatch.delenv(
+        "OPENAI_CHECK_REASONING_EFFORT",
+        raising=False,
+    )
+
+    settings = get_openai_settings(profile="check")
+
+    assert settings.common.model == "gpt-5.6-luna"
+    assert settings.common.reasoning_effort == "none"
+    assert settings.personal == settings.common
+
+
+def test_model_settings_read_environment(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_COMMON_MODEL", "common-test")
+    monkeypatch.setenv(
+        "OPENAI_COMMON_REASONING_EFFORT",
+        "high",
+    )
+    monkeypatch.setenv("OPENAI_PERSONAL_MODEL", "personal-test")
+    monkeypatch.setenv(
+        "OPENAI_PERSONAL_REASONING_EFFORT",
+        "low",
+    )
+
+    settings = get_openai_settings()
+
+    assert settings.common.model == "common-test"
+    assert settings.common.reasoning_effort == "high"
+    assert settings.personal.model == "personal-test"
+    assert settings.personal.reasoning_effort == "low"
+
+
+def test_openai_settings_reject_invalid_reasoning_effort(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv(
+        "OPENAI_COMMON_REASONING_EFFORT",
+        "invalid",
+    )
+
+    with pytest.raises(ValueError, match="must be one of"):
+        get_openai_settings()
+
+
+def test_openai_settings_reject_invalid_profile(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    with pytest.raises(ValueError, match="profile"):
+        get_openai_settings(profile="invalid")

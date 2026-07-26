@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Literal, cast
 
 from dotenv import load_dotenv
 
@@ -13,11 +14,36 @@ DATABASE_URL = os.getenv(
 )
 
 
+ReasoningEffort = Literal[
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+]
+VALID_REASONING_EFFORTS = {
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+}
+
+
+@dataclass(frozen=True)
+class ModelSettings:
+    model: str
+    reasoning_effort: ReasoningEffort
+
+
 @dataclass(frozen=True)
 class OpenAiSettings:
     api_key: str
-    model: str
     timeout_seconds: float
+    common: ModelSettings
+    personal: ModelSettings
 
 
 @dataclass(frozen=True)
@@ -25,9 +51,10 @@ class ScriptGenerationSettings:
     max_concurrency: int
 
 
-def get_openai_settings() -> OpenAiSettings:
+def get_openai_settings(
+    profile: str = "production",
+) -> OpenAiSettings:
     api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("OPENAI_MODEL")
     timeout_seconds = _get_positive_float(
         "OPENAI_TIMEOUT_SECONDS",
         default=300.0,
@@ -38,15 +65,50 @@ def get_openai_settings() -> OpenAiSettings:
             "OPENAI_API_KEY environment variable is required"
         )
 
-    if not model:
+    if profile == "production":
+        common = ModelSettings(
+            model=os.getenv(
+                "OPENAI_COMMON_MODEL",
+                "gpt-5.6-terra",
+            ),
+            reasoning_effort=_get_reasoning_effort(
+                "OPENAI_COMMON_REASONING_EFFORT",
+                default="medium",
+            ),
+        )
+        personal = ModelSettings(
+            model=os.getenv(
+                "OPENAI_PERSONAL_MODEL",
+                "gpt-5.6-luna",
+            ),
+            reasoning_effort=_get_reasoning_effort(
+                "OPENAI_PERSONAL_REASONING_EFFORT",
+                default="none",
+            ),
+        )
+    elif profile == "check":
+        check_settings = ModelSettings(
+            model=os.getenv(
+                "OPENAI_CHECK_MODEL",
+                "gpt-5.6-luna",
+            ),
+            reasoning_effort=_get_reasoning_effort(
+                "OPENAI_CHECK_REASONING_EFFORT",
+                default="none",
+            ),
+        )
+        common = check_settings
+        personal = check_settings
+    else:
         raise ValueError(
-            "OPENAI_MODEL environment variable is required"
+            "profile must be 'production' or 'check'"
         )
 
     return OpenAiSettings(
         api_key=api_key,
-        model=model,
         timeout_seconds=timeout_seconds,
+        common=common,
+        personal=personal,
     )
 
 
@@ -105,3 +167,18 @@ def _get_positive_int(
         )
 
     return value
+
+
+def _get_reasoning_effort(
+    name: str,
+    default: ReasoningEffort,
+) -> ReasoningEffort:
+    value = os.getenv(name, default)
+
+    if value not in VALID_REASONING_EFFORTS:
+        raise ValueError(
+            f"{name} must be one of "
+            "none, low, medium, high, xhigh, max"
+        )
+
+    return cast(ReasoningEffort, value)
