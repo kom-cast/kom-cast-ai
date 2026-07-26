@@ -270,6 +270,40 @@ class ScriptDocumentRepository:
             for document in self.session.scalars(stmt)
         }
 
+    def find_documents(
+        self,
+        user_ids: list[UUID],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, ScriptDocument]:
+        unique_user_ids = list(dict.fromkeys(user_ids))
+
+        if not unique_user_ids:
+            return {}
+
+        stmt = select(ScriptDocument).where(
+            ScriptDocument.user_id.in_(unique_user_ids),
+            ScriptDocument.period_start == period_start,
+            ScriptDocument.period_end == period_end,
+        )
+        return {
+            document.user_id: document
+            for document in self.session.scalars(stmt)
+        }
+
+    def find_document(
+        self,
+        user_id: UUID,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> ScriptDocument | None:
+        stmt = select(ScriptDocument).where(
+            ScriptDocument.user_id == user_id,
+            ScriptDocument.period_start == period_start,
+            ScriptDocument.period_end == period_end,
+        )
+        return self.session.scalar(stmt)
+
     def create_generating_document(
         self,
         user_id: UUID,
@@ -313,6 +347,46 @@ class ScriptDocumentRepository:
         status: ScriptDocumentStatus,
     ) -> ScriptDocument:
         document.status = status
+        self.session.flush()
+        return document
+
+    def retry_failed_document(
+        self,
+        document: ScriptDocument,
+    ) -> ScriptDocument:
+        if document.status != ScriptDocumentStatus.FAILED:
+            raise ValueError(
+                "only failed documents can be retried"
+            )
+
+        script_sections = self.find_sections(document.id)
+        personal_section_ids = [
+            item.section_id
+            for item in script_sections
+            if item.section_type
+            in (
+                SectionType.OPENING,
+                SectionType.BRIDGE,
+                SectionType.CLOSING,
+            )
+        ]
+
+        for script_section in script_sections:
+            self.session.delete(script_section)
+
+        self.session.flush()
+
+        if personal_section_ids:
+            personal_sections = self.session.scalars(
+                select(Section).where(
+                    Section.id.in_(personal_section_ids)
+                )
+            )
+
+            for section in personal_sections:
+                self.session.delete(section)
+
+        document.status = ScriptDocumentStatus.GENERATING
         self.session.flush()
         return document
 

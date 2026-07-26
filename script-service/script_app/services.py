@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from openai import APITimeoutError, OpenAIError
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from script_app.ai_client import AiClient, AiResponseInvalidError
@@ -58,8 +58,8 @@ class ScriptGenerationService:
         period_end: datetime,
     ) -> GenerateUserScriptsResponse:
         unique_user_ids = list(dict.fromkeys(user_ids))
-        completed_documents = (
-            self.script_document_repository.find_completed_documents(
+        existing_documents = (
+            self.script_document_repository.find_documents(
                 unique_user_ids,
                 period_start=period_start,
                 period_end=period_end,
@@ -73,19 +73,36 @@ class ScriptGenerationService:
             )
             for user_id in unique_user_ids
             if (
-                document := completed_documents.get(user_id)
+                document := existing_documents.get(user_id)
             ) is not None
+            and document.status == ScriptDocumentStatus.COMPLETED
+        ]
+        failures = [
+            self._failure(
+                user_id,
+                ScriptFailureCode.GENERATION_IN_PROGRESS,
+                "이미 스크립트를 생성하고 있습니다.",
+            )
+            for user_id in unique_user_ids
+            if (
+                document := existing_documents.get(user_id)
+            ) is not None
+            and document.status == ScriptDocumentStatus.GENERATING
         ]
         pending_user_ids = [
             user_id
             for user_id in unique_user_ids
-            if user_id not in completed_documents
+            if (
+                (document := existing_documents.get(user_id))
+                is None
+                or document.status == ScriptDocumentStatus.FAILED
+            )
         ]
 
         if not pending_user_ids:
             return GenerateUserScriptsResponse(
                 scripts=scripts,
-                failures=[],
+                failures=failures,
             )
 
         targets_by_user = (
@@ -116,8 +133,6 @@ class ScriptGenerationService:
             )
         )
         self.session.commit()
-
-        failures: list[ScriptFailureResult] = []
 
         for user_id in pending_user_ids:
             targets = targets_by_user[user_id]
@@ -166,15 +181,79 @@ class ScriptGenerationService:
                 )
                 continue
 
+            existing_document = existing_documents.get(user_id)
+
             try:
-                document = (
-                    self.script_document_repository
-                    .create_generating_document(
+                if existing_document is not None:
+                    document = (
+                        self.script_document_repository
+                        .retry_failed_document(existing_document)
+                    )
+                else:
+                    document = (
+                        self.script_document_repository
+                        .create_generating_document(
+                            user_id,
+                            period_start=period_start,
+                            period_end=period_end,
+                        )
+                    )
+                self.session.commit()
+            except IntegrityError:
+                self.session.rollback()
+                concurrent_document = (
+                    self.script_document_repository.find_document(
                         user_id,
                         period_start=period_start,
                         period_end=period_end,
                     )
                 )
+
+                if (
+                    concurrent_document is not None
+                    and concurrent_document.status
+                    == ScriptDocumentStatus.COMPLETED
+                ):
+                    scripts.append(
+                        GeneratedScriptResult(
+                            script_id=concurrent_document.id,
+                            user_id=user_id,
+                            reused=True,
+                        )
+                    )
+                elif (
+                    concurrent_document is not None
+                    and concurrent_document.status
+                    == ScriptDocumentStatus.GENERATING
+                ):
+                    failures.append(
+                        self._failure(
+                            user_id,
+                            ScriptFailureCode.GENERATION_IN_PROGRESS,
+                            "이미 스크립트를 생성하고 있습니다.",
+                        )
+                    )
+                else:
+                    failures.append(
+                        self._failure(
+                            user_id,
+                            ScriptFailureCode.DATABASE_ERROR,
+                            "스크립트 생성 준비에 실패했습니다.",
+                        )
+                    )
+                continue
+            except SQLAlchemyError:
+                self.session.rollback()
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.DATABASE_ERROR,
+                        "스크립트 생성 준비에 실패했습니다.",
+                    )
+                )
+                continue
+
+            try:
                 personal_sections = (
                     await self.personal_section_service
                     .generate_sections(
@@ -203,7 +282,7 @@ class ScriptGenerationService:
                     )
                 )
             except (TimeoutError, APITimeoutError):
-                self.session.rollback()
+                self._mark_document_failed(document)
                 failures.append(
                     self._failure(
                         user_id,
@@ -212,7 +291,7 @@ class ScriptGenerationService:
                     )
                 )
             except AiResponseInvalidError:
-                self.session.rollback()
+                self._mark_document_failed(document)
                 failures.append(
                     self._failure(
                         user_id,
@@ -221,7 +300,7 @@ class ScriptGenerationService:
                     )
                 )
             except SQLAlchemyError:
-                self.session.rollback()
+                self._mark_document_failed(document)
                 failures.append(
                     self._failure(
                         user_id,
@@ -230,7 +309,7 @@ class ScriptGenerationService:
                     )
                 )
             except OpenAIError:
-                self.session.rollback()
+                self._mark_document_failed(document)
                 failures.append(
                     self._failure(
                         user_id,
@@ -246,6 +325,21 @@ class ScriptGenerationService:
             scripts=scripts,
             failures=failures,
         )
+
+    def _mark_document_failed(
+        self,
+        document,
+    ) -> None:
+        self.session.rollback()
+
+        try:
+            self.script_document_repository.update_status(
+                document,
+                ScriptDocumentStatus.FAILED,
+            )
+            self.session.commit()
+        except SQLAlchemyError:
+            self.session.rollback()
 
     @staticmethod
     def _has_failed_target(

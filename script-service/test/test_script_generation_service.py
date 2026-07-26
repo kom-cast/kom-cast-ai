@@ -110,7 +110,7 @@ async def test_reuses_completed_documents() -> None:
         period_end=PERIOD_END,
         status=ScriptDocumentStatus.COMPLETED,
     )
-    document_repository.find_completed_documents.return_value = {
+    document_repository.find_documents.return_value = {
         USER_ID_1: existing
     }
 
@@ -138,7 +138,7 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_completed_documents.return_value = {}
+    document_repository.find_documents.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"],
@@ -180,7 +180,7 @@ async def test_generates_document_with_industries_before_stocks() -> None:
     assert content_sections == [industry, stock]
     assert result.scripts[0].reused is False
     assert result.failures == []
-    assert session.commit.call_count == 2
+    assert session.commit.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -193,7 +193,7 @@ async def test_reports_no_interest_and_no_news_failures() -> None:
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_completed_documents.return_value = {}
+    document_repository.find_documents.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(),
         USER_ID_2: UserInterestTargets(
@@ -231,7 +231,7 @@ async def test_ai_failure_for_one_user_does_not_rollback_other_user(
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_completed_documents.return_value = {}
+    document_repository.find_documents.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"]
@@ -290,7 +290,7 @@ async def test_ai_failure_for_one_user_does_not_rollback_other_user(
         ScriptFailureCode.AI_RESPONSE_INVALID
     )
     session.rollback.assert_called_once()
-    assert session.commit.call_count == 2
+    assert session.commit.call_count == 5
 
 
 @pytest.mark.asyncio
@@ -303,7 +303,7 @@ async def test_common_target_ai_failure_fails_affected_user() -> None:
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_completed_documents.return_value = {}
+    document_repository.find_documents.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"]
@@ -325,3 +325,97 @@ async def test_common_target_ai_failure_fails_affected_user() -> None:
         ScriptFailureCode.AI_GENERATION_FAILED
     )
     personal_service.generate_sections.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_existing_generating_document_is_not_duplicated() -> None:
+    (
+        service,
+        session,
+        interest_repository,
+        document_repository,
+        common_service,
+        personal_service,
+    ) = create_service()
+    generating = ScriptDocument(
+        id=UUID(int=10),
+        user_id=USER_ID_1,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+        status=ScriptDocumentStatus.GENERATING,
+    )
+    document_repository.find_documents.return_value = {
+        USER_ID_1: generating
+    }
+
+    result = await service.generate(
+        [USER_ID_1],
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    assert result.failures[0].code == (
+        ScriptFailureCode.GENERATION_IN_PROGRESS
+    )
+    interest_repository.find_by_user_ids.assert_not_called()
+    common_service.prepare_sections.assert_not_awaited()
+    personal_service.generate_sections.assert_not_awaited()
+    session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_document_is_retried_with_same_document() -> None:
+    (
+        service,
+        session,
+        interest_repository,
+        document_repository,
+        common_service,
+        personal_service,
+    ) = create_service()
+    failed = ScriptDocument(
+        id=UUID(int=10),
+        user_id=USER_ID_1,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+        status=ScriptDocumentStatus.FAILED,
+    )
+    document_repository.find_documents.return_value = {
+        USER_ID_1: failed
+    }
+    interest_repository.find_by_user_ids.return_value = {
+        USER_ID_1: UserInterestTargets(
+            stock_codes=["005930"]
+        )
+    }
+    stock = section(1, SectionType.STOCK, "005930")
+    common_service.prepare_sections.return_value = (
+        CommonSectionResult(
+            stock_sections={"005930": stock}
+        )
+    )
+    document_repository.retry_failed_document.return_value = failed
+    personal_service.generate_sections.return_value = (
+        PersonalSectionResult(
+            opening=section(100, SectionType.OPENING),
+            bridges=[],
+            closing=section(101, SectionType.CLOSING),
+        )
+    )
+
+    result = await service.generate(
+        [USER_ID_1],
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    document_repository.retry_failed_document.assert_called_once_with(
+        failed
+    )
+    (
+        document_repository
+        .create_generating_document
+        .assert_not_called()
+    )
+    assert result.scripts[0].script_id == failed.id
+    assert result.scripts[0].reused is False

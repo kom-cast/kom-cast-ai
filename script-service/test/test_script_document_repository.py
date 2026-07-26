@@ -159,3 +159,51 @@ def test_completed_document_lookup_handles_empty_input(
     )
 
     assert result == {}
+
+
+def test_find_documents_returns_all_statuses(
+    session: Session,
+) -> None:
+    generating = add_document(
+        session,
+        user_id=USER_ID_1,
+        status=ScriptDocumentStatus.GENERATING,
+    )
+    failed = add_document(
+        session,
+        user_id=USER_ID_2,
+        status=ScriptDocumentStatus.FAILED,
+    )
+    repository = ScriptDocumentRepository(session)
+
+    result = repository.find_documents(
+        [USER_ID_1, USER_ID_2],
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    assert result == {
+        USER_ID_1: generating,
+        USER_ID_2: failed,
+    }
+
+
+def test_retry_failed_document_clears_personal_sections(
+    session: Session,
+) -> None:
+    repository = ScriptDocumentRepository(session)
+    document = add_document(
+        session,
+        user_id=USER_ID_1,
+        status=ScriptDocumentStatus.FAILED,
+    )
+    opening = add_personal_section(session, SectionType.OPENING)
+    repository.add_sections(document, [opening])
+    session.commit()
+    opening_id = opening.id
+
+    result = repository.retry_failed_document(document)
+
+    assert result.status == ScriptDocumentStatus.GENERATING
+    assert repository.find_sections(document.id) == []
+    assert session.get(Section, opening_id) is None
