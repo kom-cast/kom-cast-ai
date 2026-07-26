@@ -1,13 +1,19 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
+from uuid import UUID
 
-from script_app.ai_client import AiClient
+from openai import APITimeoutError, OpenAIError
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from script_app.ai_client import AiClient, AiResponseInvalidError
 from script_app.models import (
     NewsArticle,
     Section,
     SectionTargetType,
     SectionType,
+    ScriptDocumentStatus,
     StockScript,
 )
 from script_app.repositories import (
@@ -15,8 +21,255 @@ from script_app.repositories import (
     ScriptRepository,
     SectionLineData,
     SectionRepository,
+    ScriptDocumentRepository,
+    UserInterestRepository,
 )
-from script_app.schemas import AiScriptLine, CommonSectionAiResponse
+from script_app.schemas import (
+    AiScriptLine,
+    CommonSectionAiResponse,
+    GeneratedScriptResult,
+    GenerateUserScriptsResponse,
+    ScriptFailureCode,
+    ScriptFailureResult,
+)
+
+
+class ScriptGenerationService:
+    def __init__(
+        self,
+        session: Session,
+        user_interest_repository: UserInterestRepository,
+        script_document_repository: ScriptDocumentRepository,
+        common_section_service: "CommonSectionService",
+        personal_section_service: "PersonalSectionService",
+    ) -> None:
+        self.session = session
+        self.user_interest_repository = user_interest_repository
+        self.script_document_repository = (
+            script_document_repository
+        )
+        self.common_section_service = common_section_service
+        self.personal_section_service = personal_section_service
+
+    async def generate(
+        self,
+        user_ids: list[UUID],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> GenerateUserScriptsResponse:
+        unique_user_ids = list(dict.fromkeys(user_ids))
+        completed_documents = (
+            self.script_document_repository.find_completed_documents(
+                unique_user_ids,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        )
+        scripts = [
+            GeneratedScriptResult(
+                script_id=document.id,
+                user_id=user_id,
+                reused=True,
+            )
+            for user_id in unique_user_ids
+            if (
+                document := completed_documents.get(user_id)
+            ) is not None
+        ]
+        pending_user_ids = [
+            user_id
+            for user_id in unique_user_ids
+            if user_id not in completed_documents
+        ]
+
+        if not pending_user_ids:
+            return GenerateUserScriptsResponse(
+                scripts=scripts,
+                failures=[],
+            )
+
+        targets_by_user = (
+            self.user_interest_repository.find_by_user_ids(
+                pending_user_ids
+            )
+        )
+        all_stock_codes = sorted(
+            {
+                stock_code
+                for targets in targets_by_user.values()
+                for stock_code in targets.stock_codes
+            }
+        )
+        all_industry_codes = sorted(
+            {
+                industry_code
+                for targets in targets_by_user.values()
+                for industry_code in targets.industry_codes
+            }
+        )
+        common_result = (
+            await self.common_section_service.prepare_sections(
+                stock_codes=all_stock_codes,
+                industry_codes=all_industry_codes,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        )
+        self.session.commit()
+
+        failures: list[ScriptFailureResult] = []
+
+        for user_id in pending_user_ids:
+            targets = targets_by_user[user_id]
+
+            if not targets.stock_codes and not targets.industry_codes:
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.NO_INTEREST_TARGET,
+                        "관심 종목 또는 업종이 없습니다.",
+                    )
+                )
+                continue
+
+            if self._has_failed_target(targets, common_result):
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.AI_GENERATION_FAILED,
+                        "공통 섹션 생성에 실패했습니다.",
+                    )
+                )
+                continue
+
+            content_sections = [
+                common_result.industry_sections[industry_code]
+                for industry_code in sorted(
+                    targets.industry_codes
+                )
+                if industry_code
+                in common_result.industry_sections
+            ]
+            content_sections.extend(
+                common_result.stock_sections[stock_code]
+                for stock_code in sorted(targets.stock_codes)
+                if stock_code in common_result.stock_sections
+            )
+
+            if not content_sections:
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.NO_NEWS_FOUND,
+                        "조회 기간에 관련 뉴스가 없습니다.",
+                    )
+                )
+                continue
+
+            try:
+                document = (
+                    self.script_document_repository
+                    .create_generating_document(
+                        user_id,
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
+                personal_sections = (
+                    await self.personal_section_service
+                    .generate_sections(
+                        content_sections,
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
+                ordered_sections = personal_sections.assemble(
+                    content_sections
+                )
+                self.script_document_repository.add_sections(
+                    document,
+                    ordered_sections,
+                )
+                self.script_document_repository.update_status(
+                    document,
+                    ScriptDocumentStatus.COMPLETED,
+                )
+                self.session.commit()
+                scripts.append(
+                    GeneratedScriptResult(
+                        script_id=document.id,
+                        user_id=user_id,
+                        reused=False,
+                    )
+                )
+            except (TimeoutError, APITimeoutError):
+                self.session.rollback()
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.GENERATION_TIMEOUT,
+                        "스크립트 생성 시간이 초과되었습니다.",
+                    )
+                )
+            except AiResponseInvalidError:
+                self.session.rollback()
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.AI_RESPONSE_INVALID,
+                        "AI 응답 형식이 올바르지 않습니다.",
+                    )
+                )
+            except SQLAlchemyError:
+                self.session.rollback()
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.DATABASE_ERROR,
+                        "스크립트 저장에 실패했습니다.",
+                    )
+                )
+            except OpenAIError:
+                self.session.rollback()
+                failures.append(
+                    self._failure(
+                        user_id,
+                        ScriptFailureCode.AI_GENERATION_FAILED,
+                        "스크립트 생성에 실패했습니다.",
+                    )
+                )
+            except Exception:
+                self.session.rollback()
+                raise
+
+        return GenerateUserScriptsResponse(
+            scripts=scripts,
+            failures=failures,
+        )
+
+    @staticmethod
+    def _has_failed_target(
+        targets,
+        common_result: "CommonSectionResult",
+    ) -> bool:
+        return bool(
+            set(targets.stock_codes)
+            & common_result.failed_stock_codes
+            or set(targets.industry_codes)
+            & common_result.failed_industry_codes
+        )
+
+    @staticmethod
+    def _failure(
+        user_id: UUID,
+        code: ScriptFailureCode,
+        message: str,
+    ) -> ScriptFailureResult:
+        return ScriptFailureResult(
+            user_id=user_id,
+            code=code,
+            message=message,
+        )
 
 
 @dataclass
