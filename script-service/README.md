@@ -37,6 +37,14 @@ Content-Type: application/json
 - 중복 사용자 ID는 최초 입력 순서를 유지하며 제거됩니다.
 - 현재 사용자 수 제한은 없습니다.
 
+요청 필드:
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `start_at` | timezone을 포함한 ISO 8601 datetime | O | 뉴스 조회 시작 시각. 조회 범위에 포함 |
+| `end_at` | timezone을 포함한 ISO 8601 datetime | O | 뉴스 조회 종료 시각. 조회 범위에 미포함 |
+| `user_ids` | UUID 배열 | O | 생성 대상 사용자 ID. 빈 배열은 허용하지 않으며 중복은 제거 |
+
 응답 예시:
 
 ```json
@@ -59,6 +67,27 @@ Content-Type: application/json
 ```
 
 전체 성공, 부분 성공, 사용자 단위 전체 실패는 `200 OK`를 반환합니다. 요청값 검증 실패는 `422 Unprocessable Entity`, 요청 전체를 처리할 수 없는 장애는 `500 Internal Server Error`를 반환합니다.
+
+응답 필드:
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `scripts` | 객체 배열 | 생성 또는 재사용에 성공한 사용자별 스크립트 |
+| `scripts[].script_id` | UUID | `script_documents.id` |
+| `scripts[].user_id` | UUID | 스크립트 소유 사용자 |
+| `scripts[].reused` | boolean | 동일 사용자·기간의 완료 문서를 재사용했는지 여부 |
+| `failures` | 객체 배열 | 생성하지 못한 사용자별 실패 결과 |
+| `failures[].user_id` | UUID | 실패한 사용자 |
+| `failures[].code` | string enum | 서비스 오류 코드 |
+| `failures[].message` | string | 외부에 공개 가능한 실패 설명 |
+
+HTTP 응답:
+
+| 상태 | 조건 |
+|---|---|
+| `200 OK` | 전체 성공, 일부 사용자 성공 또는 모든 사용자의 사용자 단위 실패 |
+| `422 Unprocessable Entity` | timezone 누락, 잘못된 기간, 빈 사용자 목록 등 요청 검증 실패 |
+| `500 Internal Server Error` | 요청 전체를 처리할 수 없는 예상하지 못한 서버 장애 |
 
 ### 상태 확인
 
@@ -186,3 +215,121 @@ python -m pip install -r requirements.txt
 - 뉴스 요약과 종목·업종 매핑
 
 `Base.metadata.create_all()`은 없는 테이블을 생성할 수 있지만 기존 테이블의 컬럼, 제약조건 또는 인덱스를 마이그레이션하지 않습니다. 운영 DB 변경은 별도 스키마 관리 절차로 수행해야 합니다.
+
+### ERD
+
+```mermaid
+erDiagram
+    INDUSTRIES {
+        string industry_code PK
+        string industry_name
+    }
+
+    STOCKS {
+        string stock_code PK
+        string corp_code UK
+        string corp_name
+        date dart_modify_date
+        string industry_code FK
+    }
+
+    USER_STOCKS {
+        uuid id PK
+        uuid user_id
+        string stock_code FK
+        string interest_type
+    }
+
+    USER_INDUSTRIES {
+        uuid id PK
+        uuid user_id
+        string industry_code FK
+    }
+
+    NEWS_ARTICLES {
+        uuid id PK
+        text source
+        date news_date
+        text news_code
+        datetime published_at
+        text title
+        text body
+        int press_code
+    }
+
+    NEWS_STOCK_MAPPINGS {
+        uuid news_id PK, FK
+        string stock_code PK, FK
+    }
+
+    NEWS_INDUSTRY_MAPPINGS {
+        uuid news_id PK, FK
+        string industry_code PK, FK
+    }
+
+    SECTIONS {
+        uuid id PK
+        string section_type
+        string target_type
+        string stock_code FK
+        string industry_code FK
+        datetime period_start
+        datetime period_end
+        datetime created_at
+    }
+
+    SECTION_LINES {
+        uuid id PK
+        uuid section_id FK
+        int line_order
+        string talker
+        text content
+    }
+
+    SCRIPT_DOCUMENTS {
+        uuid id PK
+        uuid user_id
+        datetime period_start
+        datetime period_end
+        string status
+        datetime created_at
+    }
+
+    SCRIPT_SECTIONS {
+        uuid id PK
+        uuid document_id FK
+        uuid section_id FK
+        int section_order
+        string section_type
+    }
+
+    INDUSTRIES o|--o{ STOCKS : classifies
+    STOCKS ||--o{ USER_STOCKS : interested_in
+    INDUSTRIES ||--o{ USER_INDUSTRIES : interested_in
+    NEWS_ARTICLES ||--o{ NEWS_STOCK_MAPPINGS : maps
+    STOCKS ||--o{ NEWS_STOCK_MAPPINGS : maps
+    NEWS_ARTICLES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
+    INDUSTRIES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
+    STOCKS o|--o{ SECTIONS : stock_target
+    INDUSTRIES o|--o{ SECTIONS : industry_target
+    SECTIONS ||--o{ SECTION_LINES : contains
+    SCRIPT_DOCUMENTS ||--o{ SCRIPT_SECTIONS : orders
+    SECTIONS ||--o{ SCRIPT_SECTIONS : reused_by
+```
+
+### 테이블 역할
+
+| 테이블 | 역할 |
+|---|---|
+| `industries`, `stocks` | 업종·종목 마스터 |
+| `user_industries`, `user_stocks` | 사용자별 관심 업종·종목 |
+| `news_articles` | 생성 입력으로 사용하는 뉴스 원문과 요약 정보 |
+| `news_industry_mappings`, `news_stock_mappings` | 뉴스와 업종·종목의 다대다 관계 |
+| `sections` | 공통 콘텐츠 또는 사용자별 오프닝·브리지·클로징 |
+| `section_lines` | 섹션에 포함된 코스·코미 발화와 발화 순서 |
+| `script_documents` | 사용자와 조회 기간별 생성 문서 및 생성 상태 |
+| `script_sections` | 문서에 포함된 섹션과 최종 재생 순서 |
+
+`STOCK`, `INDUSTRY` 섹션은 대상과 기간이 같으면 여러 사용자 문서에서
+재사용합니다. `OPENING`, `BRIDGE`, `CLOSING` 섹션은 사용자별로 생성하며
+`script_sections.section_order`를 기준으로 공통 섹션과 함께 재생합니다.
