@@ -80,8 +80,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=datetime(2026, 7, 16,),
-            end=datetime(2026, 7, 17,),
+            start_at=datetime(2026, 7, 16,),
+            end_at=datetime(2026, 7, 17,),
         )
 
         # then
@@ -115,8 +115,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=datetime(2026, 7, 16,),
-            end=datetime(2026, 7, 17,),
+            start_at=datetime(2026, 7, 16,),
+            end_at=datetime(2026, 7, 17,),
         )
 
         # then
@@ -155,8 +155,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=datetime(2026, 7, 16,),
-            end=datetime(2026, 7, 17,),
+            start_at=datetime(2026, 7, 16,),
+            end_at=datetime(2026, 7, 17,),
         )
 
         # then
@@ -184,8 +184,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=start,
-            end=datetime(2026, 7, 17,),
+            start_at=start,
+            end_at=datetime(2026, 7, 17,),
         )
 
         # then
@@ -220,8 +220,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=datetime(2026, 7, 16,),
-            end=end,
+            start_at=datetime(2026, 7, 16,),
+            end_at=end,
         )
 
         # then
@@ -238,8 +238,8 @@ class TestNewsRepository:
         # when
         result = repository.find_news_summaries(
             stock_id=1,
-            start=datetime(2026, 7, 16,),
-            end=datetime(2026, 7, 17,),
+            start_at=datetime(2026, 7, 16,),
+            end_at=datetime(2026, 7, 17,),
         )
 
         # then

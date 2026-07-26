@@ -13,16 +13,16 @@ class NewsRepository:
     def find_news_summaries(
         self,
         stock_id: int,
-        start: datetime,
-        end: datetime,
+        start_at: datetime,
+        end_at: datetime,
     ) -> list[StockNewsSummary]:
 
         stmt = (
             select(StockNewsSummary)
             .where(
                 StockNewsSummary.stock_id == stock_id,
-                StockNewsSummary.news_published_at >= start,
-                StockNewsSummary.news_published_at < end,
+                StockNewsSummary.news_published_at >= start_at,
+                StockNewsSummary.news_published_at < end_at,
             )
             .order_by(
                 StockNewsSummary.news_published_at
