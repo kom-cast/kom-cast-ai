@@ -7,7 +7,6 @@ from script_app.config import get_script_generation_settings
 from script_app.database import SessionFactory
 from script_app.repositories import (
     NewsRepository,
-    ScriptRepository,
     ScriptDocumentRepository,
     SectionRepository,
     TargetRepository,
@@ -17,7 +16,6 @@ from script_app.services import (
     CommonSectionService,
     PersonalSectionService,
     ScriptGenerationService,
-    ScriptService,
 )
 
 
@@ -27,16 +25,6 @@ def get_session():
         yield session
     finally:
         session.close()
-
-
-def create_script_service(
-    session: Session,
-) -> ScriptService:
-    return ScriptService(
-        news_repository=NewsRepository(session),
-        script_repository=ScriptRepository(session),
-        ai_client=create_openai_client(),
-    )
 
 
 def create_script_generation_service(

@@ -7,9 +7,10 @@ async def main() -> None:
     ai_client = create_openai_client()
 
     source = """
-종목 ID: 1
+종목 코드: 005930
+대상 이름: 삼성전자
 
-다음은 해당 종목과 관련된 뉴스 요약입니다.
+지정 기간의 뉴스 요약:
 
 [뉴스 1]
 제목: 삼성전자, 반도체 설비 투자 확대
@@ -22,10 +23,11 @@ async def main() -> None:
 가격이 상승할 가능성이 있다고 전망했다.
 """.strip()
 
-    result = await ai_client.generate_script(source)
+    result = await ai_client.generate_common_section(source)
 
     print("=== 생성 결과 ===")
-    print(result)
+    for line in result.lines:
+        print(f"{line.talker.value}: {line.content}")
 
 
 if __name__ == "__main__":

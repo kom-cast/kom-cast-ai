@@ -12,7 +12,6 @@ from script_app.schemas import (
 
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
-PROMPT_PATH = PROMPT_DIR / "script_prompt.txt"
 COMMON_SECTION_PROMPT_PATH = (
     PROMPT_DIR / "common_section_prompt.txt"
 )
@@ -30,10 +29,6 @@ def _load_prompt(path: Path) -> str:
         ) from error
 
 
-def load_prompt() -> str:
-    return _load_prompt(PROMPT_PATH)
-
-
 def load_common_section_prompt() -> str:
     return _load_prompt(COMMON_SECTION_PROMPT_PATH)
 
@@ -47,13 +42,6 @@ class AiResponseInvalidError(ValueError):
 
 
 class AiClient(ABC):
-    @abstractmethod
-    async def generate_script(self, source: str) -> str:
-        """
-        뉴스 요약문을 전달받아 오디오 브리핑 스크립트를 생성한다.
-        """
-        raise NotImplementedError
-
     @abstractmethod
     async def generate_common_section(
         self,
@@ -78,15 +66,6 @@ class OpenAiClient(AiClient):
     ) -> None:
         self.client = client
         self.model = model
-
-    async def generate_script(self, source: str) -> str:
-        response = await self.client.responses.create(
-            model=self.model,
-            instructions=load_prompt(),
-            input=source,
-        )
-
-        return response.output_text
 
     async def generate_common_section(
         self,

@@ -21,8 +21,6 @@ from script_app.models import (
     ScriptDocumentStatus,
     ScriptSection,
     Stock,
-    StockNewsSummary,
-    StockScript,
     UserIndustry,
     UserStock,
 )
@@ -74,8 +72,6 @@ def test_tables_are_created() -> None:
     assert "section_lines" in table_names
     assert "script_documents" in table_names
     assert "script_sections" in table_names
-    assert "stock_news_summaries" in table_names
-    assert "stock_scripts" in table_names
 
 
 def add_stock_master_data(session) -> None:
@@ -491,69 +487,3 @@ def test_script_section_order_must_be_positive(session) -> None:
 
     session.rollback()
 
-
-def test_save_stock_news_summary(session) -> None:
-    news_summary = StockNewsSummary(
-        title="A사 신규 제품 공개",
-        summary_content="A사가 신규 제품을 공개했다.",
-        stock_id=1,
-        news_published_at=datetime(
-            2026,
-            7,
-            16,
-            9,
-            0,
-            tzinfo=timezone.utc,
-        ),
-    )
-
-    session.add(news_summary)
-    session.commit()
-
-    assert news_summary.id is not None
-    assert news_summary.stock_id == 1
-    assert news_summary.title == "A사 신규 제품 공개"
-
-
-def test_save_stock_script(session) -> None:
-    stock_script = StockScript(
-        stock_id=1,
-        start_at=datetime(2026, 7, 16, 0, 0,),
-        end_at=datetime(2026, 7, 17, 0, 0,),
-        script_content="테스트 스크립트입니다.",
-    )
-
-    session.add(stock_script)
-    session.commit()
-
-    assert stock_script.id is not None
-    assert stock_script.created_at is not None
-
-
-def test_duplicate_stock_script_is_rejected(session) -> None:
-    start_at=datetime(2026, 7, 16, 0, 0,)
-    end_at=datetime(2026, 7, 17, 0, 0,)
-
-    first_script = StockScript(
-        stock_id=1,
-        start_at=start_at,
-        end_at=end_at,
-        script_content="첫 번째 스크립트",
-    )
-
-    second_script = StockScript(
-        stock_id=1,
-        start_at=start_at,
-        end_at=end_at,
-        script_content="두 번째 스크립트",
-    )
-
-    session.add(first_script)
-    session.commit()
-
-    session.add(second_script)
-
-    with pytest.raises(IntegrityError):
-        session.commit()
-
-    session.rollback()
