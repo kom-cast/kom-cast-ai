@@ -2,9 +2,11 @@ from datetime import date, datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -119,6 +121,83 @@ class UserIndustry(Base):
             "industry_code",
             name="uq_user_industry",
         ),
+    )
+
+
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    source: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    news_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+    )
+
+    news_code: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    title: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    body: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    press_code: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+
+class NewsStockMapping(Base):
+    __tablename__ = "news_stock_mappings"
+
+    news_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("news_articles.id"),
+        primary_key=True,
+    )
+
+    stock_code: Mapped[str] = mapped_column(
+        String(20),
+        ForeignKey("stocks.stock_code"),
+        primary_key=True,
+    )
+
+
+class NewsIndustryMapping(Base):
+    __tablename__ = "news_industry_mappings"
+
+    news_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("news_articles.id"),
+        primary_key=True,
+    )
+
+    industry_code: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("industries.industry_code"),
+        primary_key=True,
     )
 
 

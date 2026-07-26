@@ -10,6 +10,9 @@ from sqlalchemy.pool import StaticPool
 from script_app.database import Base
 from script_app.models import (
     Industry,
+    NewsArticle,
+    NewsIndustryMapping,
+    NewsStockMapping,
     Stock,
     StockNewsSummary,
     StockScript,
@@ -57,6 +60,9 @@ def test_tables_are_created() -> None:
     assert "stocks" in table_names
     assert "user_stocks" in table_names
     assert "user_industries" in table_names
+    assert "news_articles" in table_names
+    assert "news_stock_mappings" in table_names
+    assert "news_industry_mappings" in table_names
     assert "stock_news_summaries" in table_names
     assert "stock_scripts" in table_names
 
@@ -150,6 +156,96 @@ def test_duplicate_user_industry_is_rejected(session) -> None:
     session.add(
         UserIndustry(
             user_id=USER_ID,
+            industry_code="SEMI",
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def add_news_article(session) -> NewsArticle:
+    news_article = NewsArticle(
+        source="테스트 언론사",
+        news_date=date(2026, 7, 22),
+        news_code="NEWS-001",
+        published_at=datetime(
+            2026,
+            7,
+            22,
+            9,
+            0,
+            tzinfo=timezone.utc,
+        ),
+        title="반도체 신규 투자 발표",
+        body="반도체 생산 시설에 대한 신규 투자 계획을 발표했다.",
+        press_code=100,
+    )
+    session.add(news_article)
+    session.commit()
+    return news_article
+
+
+def test_save_news_article_and_target_mappings(session) -> None:
+    add_stock_master_data(session)
+    news_article = add_news_article(session)
+    stock_mapping = NewsStockMapping(
+        news_id=news_article.id,
+        stock_code="005930",
+    )
+    industry_mapping = NewsIndustryMapping(
+        news_id=news_article.id,
+        industry_code="SEMI",
+    )
+
+    session.add_all([stock_mapping, industry_mapping])
+    session.commit()
+
+    assert news_article.id is not None
+    assert stock_mapping.news_id == news_article.id
+    assert industry_mapping.news_id == news_article.id
+
+
+def test_duplicate_news_stock_mapping_is_rejected(session) -> None:
+    add_stock_master_data(session)
+    news_article = add_news_article(session)
+    session.add(
+        NewsStockMapping(
+            news_id=news_article.id,
+            stock_code="005930",
+        )
+    )
+    session.commit()
+
+    session.add(
+        NewsStockMapping(
+            news_id=news_article.id,
+            stock_code="005930",
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_duplicate_news_industry_mapping_is_rejected(session) -> None:
+    add_stock_master_data(session)
+    news_article = add_news_article(session)
+    session.add(
+        NewsIndustryMapping(
+            news_id=news_article.id,
+            industry_code="SEMI",
+        )
+    )
+    session.commit()
+
+    session.add(
+        NewsIndustryMapping(
+            news_id=news_article.id,
             industry_code="SEMI",
         )
     )
