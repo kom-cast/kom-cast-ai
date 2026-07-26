@@ -16,7 +16,165 @@ from script_app.repositories import (
     SectionLineData,
     SectionRepository,
 )
-from script_app.schemas import CommonSectionAiResponse
+from script_app.schemas import AiScriptLine, CommonSectionAiResponse
+
+
+@dataclass
+class PersonalSectionResult:
+    opening: Section
+    bridges: list[Section]
+    closing: Section
+
+    def assemble(
+        self,
+        content_sections: list[Section],
+    ) -> list[Section]:
+        if len(self.bridges) != max(
+            len(content_sections) - 1,
+            0,
+        ):
+            raise ValueError(
+                "bridge count must be one less than "
+                "content section count"
+            )
+
+        ordered_sections = [self.opening]
+
+        for index, content_section in enumerate(content_sections):
+            ordered_sections.append(content_section)
+
+            if index < len(self.bridges):
+                ordered_sections.append(self.bridges[index])
+
+        ordered_sections.append(self.closing)
+        return ordered_sections
+
+
+class PersonalSectionService:
+    def __init__(
+        self,
+        section_repository: SectionRepository,
+        ai_client: AiClient,
+    ) -> None:
+        self.section_repository = section_repository
+        self.ai_client = ai_client
+
+    async def generate_sections(
+        self,
+        content_sections: list[Section],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> PersonalSectionResult:
+        if not content_sections:
+            raise ValueError(
+                "content_sections must not be empty"
+            )
+
+        lines_by_section = (
+            self.section_repository.find_lines_by_section_ids(
+                [section.id for section in content_sections]
+            )
+        )
+        source = self._build_source(
+            content_sections,
+            lines_by_section,
+        )
+        response = await self.ai_client.generate_personal_sections(
+            source,
+            content_section_count=len(content_sections),
+        )
+
+        opening = self._save_personal_section(
+            section_type=SectionType.OPENING,
+            response_lines=response.opening,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        bridges = [
+            self._save_personal_section(
+                section_type=SectionType.BRIDGE,
+                response_lines=bridge_lines,
+                period_start=period_start,
+                period_end=period_end,
+            )
+            for bridge_lines in response.bridges
+        ]
+        closing = self._save_personal_section(
+            section_type=SectionType.CLOSING,
+            response_lines=response.closing,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+        return PersonalSectionResult(
+            opening=opening,
+            bridges=bridges,
+            closing=closing,
+        )
+
+    def _save_personal_section(
+        self,
+        section_type: SectionType,
+        response_lines: list[AiScriptLine],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> Section:
+        section = Section(
+            section_type=section_type,
+            target_type=SectionTargetType.USER,
+            stock_code=None,
+            industry_code=None,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        lines = [
+            SectionLineData(
+                talker=line.talker.value,
+                content=line.content,
+            )
+            for line in response_lines
+        ]
+        return self.section_repository.save_with_lines(
+            section,
+            lines,
+        )
+
+    @staticmethod
+    def _build_source(
+        content_sections: list[Section],
+        lines_by_section: dict,
+    ) -> str:
+        parts = [
+            f"콘텐츠 섹션 수: {len(content_sections)}",
+            "다음 순서의 콘텐츠를 자연스럽게 연결하세요.",
+        ]
+
+        for index, section in enumerate(
+            content_sections,
+            start=1,
+        ):
+            target_code = (
+                section.industry_code
+                if section.section_type == SectionType.INDUSTRY
+                else section.stock_code
+            )
+            section_lines = lines_by_section.get(section.id, [])
+            lines_text = "\n".join(
+                f"{line.talker}: {line.content}"
+                for line in section_lines
+            )
+            parts.append(
+                "\n".join(
+                    [
+                        f"콘텐츠 {index}",
+                        f"유형: {section.section_type.value}",
+                        f"대상 코드: {target_code}",
+                        lines_text,
+                    ]
+                )
+            )
+
+        return "\n\n".join(parts)
 
 
 @dataclass
