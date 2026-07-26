@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, LengthFinishReasonError
 from pathlib import Path
+from pydantic import ValidationError
 
 from script_app.config import get_openai_settings
 from script_app.schemas import (
@@ -91,12 +92,20 @@ class OpenAiClient(AiClient):
         self,
         source: str,
     ) -> CommonSectionAiResponse:
-        response = await self.client.responses.parse(
-            model=self.model,
-            instructions=load_common_section_prompt(),
-            input=source,
-            text_format=CommonSectionAiResponse,
-        )
+        try:
+            response = await self.client.responses.parse(
+                model=self.model,
+                instructions=load_common_section_prompt(),
+                input=source,
+                text_format=CommonSectionAiResponse,
+            )
+        except (
+            ValidationError,
+            LengthFinishReasonError,
+        ) as error:
+            raise AiResponseInvalidError(
+                "공통 섹션 응답 형식이 올바르지 않습니다."
+            ) from error
 
         if response.output_parsed is None:
             raise AiResponseInvalidError(
@@ -110,12 +119,20 @@ class OpenAiClient(AiClient):
         source: str,
         content_section_count: int,
     ) -> PersonalSectionsAiResponse:
-        response = await self.client.responses.parse(
-            model=self.model,
-            instructions=load_personal_sections_prompt(),
-            input=source,
-            text_format=PersonalSectionsAiResponse,
-        )
+        try:
+            response = await self.client.responses.parse(
+                model=self.model,
+                instructions=load_personal_sections_prompt(),
+                input=source,
+                text_format=PersonalSectionsAiResponse,
+            )
+        except (
+            ValidationError,
+            LengthFinishReasonError,
+        ) as error:
+            raise AiResponseInvalidError(
+                "사용자 섹션 응답 형식이 올바르지 않습니다."
+            ) from error
 
         if response.output_parsed is None:
             raise AiResponseInvalidError(

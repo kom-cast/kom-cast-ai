@@ -663,11 +663,17 @@ class CommonSectionService:
         for target, response in zip(targets, responses):
             section_type, target_code, _, _ = target
 
-            if isinstance(response, Exception):
+            if isinstance(
+                response,
+                (AiResponseInvalidError, OpenAIError, TimeoutError),
+            ):
                 self._failed_codes(result, section_type).add(
                     target_code
                 )
                 continue
+
+            if isinstance(response, BaseException):
+                raise response
 
             section = self._save_section(
                 section_type=section_type,

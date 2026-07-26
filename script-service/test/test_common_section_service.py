@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from openai import OpenAIError
 
 from script_app.ai_client import AiClient
 from script_app.models import (
@@ -227,7 +228,7 @@ async def test_isolates_ai_failure_by_target() -> None:
     news_repository.find_by_industry_codes.return_value = {}
     ai_client.generate_common_section = AsyncMock(
         side_effect=[
-            RuntimeError("AI error"),
+            OpenAIError("AI error"),
             ai_response("성공한 소식입니다."),
         ]
     )
@@ -254,6 +255,37 @@ async def test_isolates_ai_failure_by_target() -> None:
         .call_count
         == 1
     )
+
+
+@pytest.mark.asyncio
+async def test_unexpected_common_generation_error_is_not_hidden() -> None:
+    (
+        service,
+        news_repository,
+        target_repository,
+        section_repository,
+        ai_client,
+    ) = create_service()
+    section_repository.find_stock_sections.return_value = {}
+    section_repository.find_industry_sections.return_value = {}
+    news_repository.find_by_stock_codes.return_value = {
+        "005930": [news("삼성전자 뉴스")]
+    }
+    news_repository.find_by_industry_codes.return_value = {}
+    ai_client.generate_common_section = AsyncMock(
+        side_effect=RuntimeError("programming error")
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="programming error",
+    ):
+        await service.prepare_sections(
+            stock_codes=["005930"],
+            industry_codes=[],
+            period_start=PERIOD_START,
+            period_end=PERIOD_END,
+        )
 
 
 def test_common_section_service_requires_positive_concurrency() -> None:

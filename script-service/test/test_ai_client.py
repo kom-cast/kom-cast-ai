@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from pydantic import ValidationError
 
 from script_app.ai_client import (
     AiResponseInvalidError,
@@ -197,6 +198,28 @@ class TestOpenAiClient:
         )
 
         with pytest.raises(AiResponseInvalidError):
+            await ai_client.generate_common_section("입력")
+
+    @pytest.mark.asyncio
+    async def test_generate_common_section_converts_validation_error(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError) as error_info:
+            CommonSectionAiResponse(lines=[])
+
+        sdk_client = Mock()
+        sdk_client.responses.parse = AsyncMock(
+            side_effect=error_info.value
+        )
+        ai_client = OpenAiClient(
+            client=sdk_client,
+            model="test-model",
+        )
+
+        with pytest.raises(
+            AiResponseInvalidError,
+            match="응답 형식이 올바르지 않습니다",
+        ):
             await ai_client.generate_common_section("입력")
 
     @pytest.mark.asyncio
