@@ -59,7 +59,6 @@ def add_market_price(
     provider: str = "KOSCOM",
     interval: str = "DAILY",
 ) -> MarketPrice:
-    now = datetime.now(timezone.utc)
     price = MarketPrice(
         stock_code="005930",
         traded_at=traded_at,
@@ -77,8 +76,6 @@ def add_market_price(
         raw_external_id=(
             f"{provider}:{interval}:{traded_at.isoformat()}"
         ),
-        created_at=now,
-        updated_at=now,
     )
     session.add(price)
     session.commit()

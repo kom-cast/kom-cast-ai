@@ -950,7 +950,7 @@ class CommonSectionService:
                     [
                         f"뉴스 {index}",
                         f"제목: {article.title}",
-                        f"요약: {article.body}",
+                        f"요약: {article.summary or article.body}",
                     ]
                 )
             )

@@ -77,6 +77,21 @@ def create_service():
     )
 
 
+def test_common_source_prefers_news_summary() -> None:
+    article = news("삼성전자 투자 뉴스")
+    article.summary = "AI 생성용 뉴스 요약"
+
+    source = CommonSectionService._build_source(
+        section_type=SectionType.STOCK,
+        target_code="005930",
+        target_name="삼성전자",
+        news_articles=[article],
+    )
+
+    assert "요약: AI 생성용 뉴스 요약" in source
+    assert "삼성전자 투자 뉴스 요약" not in source
+
+
 @pytest.mark.asyncio
 async def test_reuses_existing_sections_without_ai_call() -> None:
     (

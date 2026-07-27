@@ -69,8 +69,8 @@ def test_tables_are_created() -> None:
     assert "user_stocks" in table_names
     assert "user_industries" in table_names
     assert "news_articles" in table_names
-    assert "news_stock_mappings" in table_names
-    assert "news_industry_mappings" in table_names
+    assert "news_stock" in table_names
+    assert "news_industry" in table_names
     assert "market_prices" in table_names
     assert "industry_prices" in table_names
     assert "sections" in table_names
@@ -290,7 +290,6 @@ def test_save_market_and_industry_prices(session) -> None:
         vwap=None,
         provider="KOSCOM",
         raw_external_id="market-price-1",
-        **timestamps,
     )
     industry_price = IndustryPrice(
         industry_code="SEMI",
@@ -347,7 +346,6 @@ def test_duplicate_price_source_keys_are_rejected(session) -> None:
             vwap=None,
             provider="KOSCOM",
             raw_external_id="duplicate",
-            **timestamps,
         )
 
     session.add(market_price())

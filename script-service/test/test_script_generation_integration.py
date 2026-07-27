@@ -116,8 +116,6 @@ def add_generation_data(session: Session) -> None:
         vwap=None,
         provider="KOSCOM",
         raw_external_id="market-price-1",
-        created_at=stored_at,
-        updated_at=stored_at,
     )
     industry_price = IndustryPrice(
         industry_code="SEMI",

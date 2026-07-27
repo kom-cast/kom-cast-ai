@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -35,6 +36,20 @@ class Industry(Base):
     industry_name: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
+        unique=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
 
@@ -65,6 +80,25 @@ class Stock(Base):
         String(50),
         ForeignKey("industries.industry_code"),
         nullable=True,
+    )
+
+    is_kospi200: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
 
@@ -170,6 +204,11 @@ class NewsArticle(Base):
         nullable=False,
     )
 
+    summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     press_code: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
@@ -177,7 +216,7 @@ class NewsArticle(Base):
 
 
 class NewsStockMapping(Base):
-    __tablename__ = "news_stock_mappings"
+    __tablename__ = "news_stock"
 
     news_id: Mapped[UUID] = mapped_column(
         Uuid,
@@ -191,9 +230,15 @@ class NewsStockMapping(Base):
         primary_key=True,
     )
 
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
 
 class NewsIndustryMapping(Base):
-    __tablename__ = "news_industry_mappings"
+    __tablename__ = "news_industry"
 
     news_id: Mapped[UUID] = mapped_column(
         Uuid,
@@ -205,6 +250,12 @@ class NewsIndustryMapping(Base):
         String(50),
         ForeignKey("industries.industry_code"),
         primary_key=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
 
@@ -285,16 +336,6 @@ class MarketPrice(Base):
 
     raw_external_id: Mapped[str] = mapped_column(
         Text,
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
         nullable=False,
     )
 

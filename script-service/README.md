@@ -226,19 +226,30 @@ python -m pip install -r requirements.txt
 
 ### ERD
 
+dbdiagram.io에서 전체 ERD를 확인하려면 새 다이어그램의 DBML 편집기에
+[`schema.dbml`](./schema.dbml) 내용을 붙여 넣습니다. 이 파일은 SQLAlchemy
+모델이 사용하는 브리핑 테이블과 외부 데이터 파이프라인 테이블을 병합한
+스키마입니다. DBML이 직접 표현하지 못하는 논리 연결, `sections`의 부분
+유니크 인덱스와 체크 제약은 컬럼 또는 테이블 메모에 기록되어 있습니다.
+
 ```mermaid
 erDiagram
     INDUSTRIES {
         string industry_code PK
-        string industry_name
+        string industry_name UK
+        datetime created_at
+        datetime updated_at
     }
 
     STOCKS {
         string stock_code PK
         string corp_code UK
         string corp_name
-        date dart_modify_date
         string industry_code FK
+        boolean is_kospi200
+        date dart_modify_date
+        datetime created_at
+        datetime updated_at
     }
 
     USER_STOCKS {
@@ -262,17 +273,20 @@ erDiagram
         datetime published_at
         text title
         text body
+        text summary
         int press_code
     }
 
-    NEWS_STOCK_MAPPINGS {
+    NEWS_STOCK {
         uuid news_id PK, FK
         string stock_code PK, FK
+        datetime created_at
     }
 
-    NEWS_INDUSTRY_MAPPINGS {
+    NEWS_INDUSTRY {
         uuid news_id PK, FK
         string industry_code PK, FK
+        datetime created_at
     }
 
     MARKET_PRICES {
@@ -334,10 +348,10 @@ erDiagram
     INDUSTRIES o|--o{ STOCKS : classifies
     STOCKS ||--o{ USER_STOCKS : interested_in
     INDUSTRIES ||--o{ USER_INDUSTRIES : interested_in
-    NEWS_ARTICLES ||--o{ NEWS_STOCK_MAPPINGS : maps
-    STOCKS ||--o{ NEWS_STOCK_MAPPINGS : maps
-    NEWS_ARTICLES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
-    INDUSTRIES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
+    NEWS_ARTICLES ||--o{ NEWS_STOCK : maps
+    STOCKS ||--o{ NEWS_STOCK : maps
+    NEWS_ARTICLES ||--o{ NEWS_INDUSTRY : maps
+    INDUSTRIES ||--o{ NEWS_INDUSTRY : maps
     STOCKS ||--o{ MARKET_PRICES : priced_by
     INDUSTRIES ||--o{ INDUSTRY_PRICES : priced_by
     STOCKS o|--o{ SECTIONS : stock_target
@@ -354,9 +368,12 @@ erDiagram
 | `industries`, `stocks` | 업종·종목 마스터 |
 | `user_industries`, `user_stocks` | 사용자별 관심 업종·종목 |
 | `news_articles` | 생성 입력으로 사용하는 뉴스 원문과 요약 정보 |
-| `news_industry_mappings`, `news_stock_mappings` | 뉴스와 업종·종목의 다대다 관계 |
+| `news_industry`, `news_stock` | 뉴스와 업종·종목의 다대다 관계 |
 | `market_prices` | 종목별 일별 종가와 등락률 등 공급자 정규화 시세 |
 | `industry_prices` | 업종별 일별 지수값과 등락률 등 공급자 정규화 시세 |
+| `industry_investor_flows` | 업종별 투자자 유형의 순매수 수량과 금액 |
+| `disclosures`, `financial_statements` | 종목 공시와 재무제표 원천 데이터 |
+| `document_embeddings` | 뉴스 등 원본 문서의 임베딩과 처리 상태 |
 | `sections` | 공통 콘텐츠 또는 사용자별 오프닝·브리지·클로징 |
 | `section_lines` | 섹션에 포함된 코스·코미 발화와 발화 순서 |
 | `script_documents` | 사용자와 조회 기간별 생성 문서 및 생성 상태 |
