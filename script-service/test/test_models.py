@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -10,6 +11,8 @@ from sqlalchemy.pool import StaticPool
 from script_app.database import Base
 from script_app.models import (
     Industry,
+    IndustryPrice,
+    MarketPrice,
     NewsArticle,
     NewsIndustryMapping,
     NewsStockMapping,
@@ -68,6 +71,8 @@ def test_tables_are_created() -> None:
     assert "news_articles" in table_names
     assert "news_stock_mappings" in table_names
     assert "news_industry_mappings" in table_names
+    assert "market_prices" in table_names
+    assert "industry_prices" in table_names
     assert "sections" in table_names
     assert "section_lines" in table_names
     assert "script_documents" in table_names
@@ -256,6 +261,98 @@ def test_duplicate_news_industry_mapping_is_rejected(session) -> None:
             industry_code="SEMI",
         )
     )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+    session.rollback()
+
+
+def test_save_market_and_industry_prices(session) -> None:
+    add_stock_master_data(session)
+    traded_at = datetime(2026, 7, 22, 15, tzinfo=timezone.utc)
+    timestamps = {
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    market_price = MarketPrice(
+        stock_code="005930",
+        traded_at=traded_at,
+        interval="DAILY",
+        open_price=Decimal("269000"),
+        high_price=Decimal("273000"),
+        low_price=Decimal("263000"),
+        close_price=Decimal("270000"),
+        volume=16011816,
+        change_rate=Decimal("3.65"),
+        trading_value=4308084851750,
+        market_cap=1578495224160000,
+        vwap=None,
+        provider="KOSCOM",
+        raw_external_id="market-price-1",
+        **timestamps,
+    )
+    industry_price = IndustryPrice(
+        industry_code="SEMI",
+        traded_at=traded_at,
+        index_value=Decimal("12345.67"),
+        change_amount=Decimal("123.45"),
+        change_rate=Decimal("1.01"),
+        open_value=None,
+        high_value=None,
+        low_value=None,
+        volume=987654321,
+        trading_value=12345678901234,
+        market_cap=None,
+        market_cap_free_float=None,
+        shares_outstanding=None,
+        foreign_ownership_rate=None,
+        short_sale_volume=None,
+        short_sale_value=None,
+        provider="KOSCOM",
+        raw_external_id="SEMI:20260723",
+        **timestamps,
+    )
+
+    session.add_all([market_price, industry_price])
+    session.commit()
+
+    assert market_price.close_price == Decimal("270000")
+    assert market_price.change_rate == Decimal("3.65")
+    assert industry_price.index_value == Decimal("12345.67")
+    assert industry_price.change_rate == Decimal("1.01")
+
+
+def test_duplicate_price_source_keys_are_rejected(session) -> None:
+    add_stock_master_data(session)
+    traded_at = datetime(2026, 7, 22, 15, tzinfo=timezone.utc)
+    timestamps = {
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    def market_price() -> MarketPrice:
+        return MarketPrice(
+            stock_code="005930",
+            traded_at=traded_at,
+            interval="DAILY",
+            open_price=Decimal("1"),
+            high_price=Decimal("1"),
+            low_price=Decimal("1"),
+            close_price=Decimal("1"),
+            volume=1,
+            change_rate=Decimal("0"),
+            trading_value=1,
+            market_cap=1,
+            vwap=None,
+            provider="KOSCOM",
+            raw_external_id="duplicate",
+            **timestamps,
+        )
+
+    session.add(market_price())
+    session.commit()
+    session.add(market_price())
 
     with pytest.raises(IntegrityError):
         session.commit()

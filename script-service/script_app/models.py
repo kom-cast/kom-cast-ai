@@ -1,8 +1,10 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     Date,
     DateTime,
@@ -10,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -202,6 +205,227 @@ class NewsIndustryMapping(Base):
         String(50),
         ForeignKey("industries.industry_code"),
         primary_key=True,
+    )
+
+
+class MarketPrice(Base):
+    __tablename__ = "market_prices"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    stock_code: Mapped[str] = mapped_column(
+        String(20),
+        ForeignKey("stocks.stock_code"),
+        nullable=False,
+    )
+
+    traded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    interval: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    open_price: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    high_price: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    low_price: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    close_price: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    volume: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    change_rate: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    trading_value: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    market_cap: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    vwap: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    raw_external_id: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "stock_code",
+            "traded_at",
+            "interval",
+            "provider",
+            name="uq_market_price_source",
+        ),
+    )
+
+
+class IndustryPrice(Base):
+    __tablename__ = "industry_prices"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    industry_code: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("industries.industry_code"),
+        nullable=False,
+    )
+
+    traded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    index_value: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    change_amount: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    change_rate: Mapped[Decimal] = mapped_column(
+        Numeric,
+        nullable=False,
+    )
+
+    open_value: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    high_value: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    low_value: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    volume: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    trading_value: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    market_cap: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    market_cap_free_float: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    shares_outstanding: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    foreign_ownership_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    short_sale_volume: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    short_sale_value: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    raw_external_id: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "industry_code",
+            "traded_at",
+            "provider",
+            name="uq_industry_price_source",
+        ),
     )
 
 
