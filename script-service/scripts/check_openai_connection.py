@@ -11,6 +11,10 @@ class SampleTarget:
     code: str
     name: str
     news: tuple[tuple[str, str], ...]
+    traded_at: str
+    price_label: str
+    price_value: str
+    change: str
 
 
 SAMPLE_TARGETS = (
@@ -25,6 +29,10 @@ SAMPLE_TARGETS = (
                 "확대하고 있다.",
             ),
         ),
+        traded_at="2026-07-22T15:00:00+00:00",
+        price_label="지수값",
+        price_value="12345.67",
+        change="1.01% 상승",
     ),
     SampleTarget(
         target_type="STOCK",
@@ -37,6 +45,10 @@ SAMPLE_TARGETS = (
                 "대응해 생산 확대 계획을 발표했다.",
             ),
         ),
+        traded_at="2026-07-22T15:00:00+00:00",
+        price_label="종가",
+        price_value="210000원",
+        change="0.75% 하락",
     ),
     SampleTarget(
         target_type="STOCK",
@@ -54,6 +66,10 @@ SAMPLE_TARGETS = (
                 "가능성이 있다고 전망했다.",
             ),
         ),
+        traded_at="2026-07-22T15:00:00+00:00",
+        price_label="종가",
+        price_value="270000원",
+        change="3.65% 상승",
     ),
 )
 
@@ -94,7 +110,32 @@ def build_personal_source(
     parts = [
         f"콘텐츠 섹션 수: {len(targets)}",
         "다음 순서의 콘텐츠를 자연스럽게 연결하세요.",
+        "오프닝에 반영할 최근 시세 현황:",
     ]
+
+    for target in targets:
+        price_type = (
+            "업종 시세"
+            if target.target_type == "INDUSTRY"
+            else "종목 시세"
+        )
+        code_label = (
+            "업종 코드"
+            if target.target_type == "INDUSTRY"
+            else "종목 코드"
+        )
+        parts.append(
+            "\n".join(
+                [
+                    price_type,
+                    f"대상: {target.name}",
+                    f"{code_label}: {target.code}",
+                    f"기준 시각: {target.traded_at}",
+                    f"{target.price_label}: {target.price_value}",
+                    f"등락: {target.change}",
+                ]
+            )
+        )
 
     for index, (target, lines) in enumerate(
         zip(targets, common_lines),
