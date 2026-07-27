@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,8 @@ from script_app.models import (
     ScriptSection,
     Stock,
     Industry,
+    IndustryPrice,
+    MarketPrice,
     UserIndustry,
     UserStock,
 )
@@ -537,3 +539,103 @@ class NewsRepository:
             news_by_industry[industry_code].append(news_article)
 
         return news_by_industry
+
+
+class PriceRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def find_latest_stock_prices(
+        self,
+        stock_codes: list[str],
+        as_of: datetime,
+        provider: str = "KOSCOM",
+    ) -> dict[str, MarketPrice]:
+        unique_stock_codes = list(dict.fromkeys(stock_codes))
+
+        if not unique_stock_codes:
+            return {}
+
+        row_number = func.row_number().over(
+            partition_by=MarketPrice.stock_code,
+            order_by=(
+                MarketPrice.traded_at.desc(),
+                MarketPrice.id.desc(),
+            ),
+        )
+        ranked_prices = (
+            select(
+                MarketPrice.id.label("price_id"),
+                row_number.label("row_number"),
+            )
+            .where(
+                MarketPrice.stock_code.in_(unique_stock_codes),
+                MarketPrice.traded_at < as_of,
+                MarketPrice.interval == "DAILY",
+                MarketPrice.provider == provider,
+            )
+            .subquery()
+        )
+        stmt = (
+            select(MarketPrice)
+            .join(
+                ranked_prices,
+                ranked_prices.c.price_id == MarketPrice.id,
+            )
+            .where(ranked_prices.c.row_number == 1)
+            .order_by(MarketPrice.stock_code)
+        )
+
+        return {
+            price.stock_code: price
+            for price in self.session.scalars(stmt)
+        }
+
+    def find_latest_industry_prices(
+        self,
+        industry_codes: list[str],
+        as_of: datetime,
+        provider: str = "KOSCOM",
+    ) -> dict[str, IndustryPrice]:
+        unique_industry_codes = list(
+            dict.fromkeys(industry_codes)
+        )
+
+        if not unique_industry_codes:
+            return {}
+
+        row_number = func.row_number().over(
+            partition_by=IndustryPrice.industry_code,
+            order_by=(
+                IndustryPrice.traded_at.desc(),
+                IndustryPrice.id.desc(),
+            ),
+        )
+        ranked_prices = (
+            select(
+                IndustryPrice.id.label("price_id"),
+                row_number.label("row_number"),
+            )
+            .where(
+                IndustryPrice.industry_code.in_(
+                    unique_industry_codes
+                ),
+                IndustryPrice.traded_at < as_of,
+                IndustryPrice.provider == provider,
+            )
+            .subquery()
+        )
+        stmt = (
+            select(IndustryPrice)
+            .join(
+                ranked_prices,
+                ranked_prices.c.price_id == IndustryPrice.id,
+            )
+            .where(ranked_prices.c.row_number == 1)
+            .order_by(IndustryPrice.industry_code)
+        )
+
+        return {
+            price.industry_code: price
+            for price in self.session.scalars(stmt)
+        }
