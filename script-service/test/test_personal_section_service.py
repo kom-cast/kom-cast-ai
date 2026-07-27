@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
@@ -6,12 +7,20 @@ import pytest
 
 from script_app.ai_client import AiClient
 from script_app.models import (
+    Industry,
+    IndustryPrice,
+    MarketPrice,
     Section,
     SectionLine,
     SectionTargetType,
     SectionType,
+    Stock,
 )
-from script_app.repositories import SectionRepository
+from script_app.repositories import (
+    PriceRepository,
+    SectionRepository,
+    TargetRepository,
+)
 from script_app.schemas import PersonalSectionsAiResponse
 from script_app.services import PersonalSectionService
 
@@ -88,10 +97,18 @@ def personal_response(
 
 def create_service():
     section_repository = Mock(spec=SectionRepository)
+    price_repository = Mock(spec=PriceRepository)
+    price_repository.find_latest_stock_prices.return_value = {}
+    price_repository.find_latest_industry_prices.return_value = {}
+    target_repository = Mock(spec=TargetRepository)
+    target_repository.find_stocks.return_value = {}
+    target_repository.find_industries.return_value = {}
     ai_client = Mock(spec=AiClient)
     ai_client.generate_personal_sections = AsyncMock()
     service = PersonalSectionService(
         section_repository=section_repository,
+        price_repository=price_repository,
+        target_repository=target_repository,
         ai_client=ai_client,
     )
     return service, section_repository, ai_client
@@ -232,6 +249,89 @@ async def test_personal_section_source_contains_ordered_content() -> None:
             "content_section_count"
         ]
         == 2
+    )
+
+
+@pytest.mark.asyncio
+async def test_personal_section_source_contains_latest_prices() -> None:
+    service, section_repository, ai_client = create_service()
+    industry = content_section(
+        section_id=1,
+        section_type=SectionType.INDUSTRY,
+        target_code="SEMI",
+    )
+    stock = content_section(
+        section_id=2,
+        section_type=SectionType.STOCK,
+        target_code="005930",
+    )
+    section_repository.find_lines_by_section_ids.return_value = {
+        industry.id: [],
+        stock.id: [],
+    }
+    market_price = Mock(spec=MarketPrice)
+    market_price.traded_at = datetime(
+        2026,
+        7,
+        22,
+        15,
+        tzinfo=timezone.utc,
+    )
+    market_price.close_price = Decimal("270000")
+    market_price.change_rate = Decimal("3.65")
+    industry_price = Mock(spec=IndustryPrice)
+    industry_price.traded_at = datetime(
+        2026,
+        7,
+        22,
+        15,
+        tzinfo=timezone.utc,
+    )
+    industry_price.index_value = Decimal("12345.67")
+    industry_price.change_rate = Decimal("-1.01")
+    service.price_repository.find_latest_stock_prices.return_value = {
+        "005930": market_price
+    }
+    service.price_repository.find_latest_industry_prices.return_value = {
+        "SEMI": industry_price
+    }
+    stock_target = Mock(spec=Stock)
+    stock_target.corp_name = "삼성전자"
+    industry_target = Mock(spec=Industry)
+    industry_target.industry_name = "반도체"
+    service.target_repository.find_stocks.return_value = {
+        "005930": stock_target
+    }
+    service.target_repository.find_industries.return_value = {
+        "SEMI": industry_target
+    }
+    ai_client.generate_personal_sections.return_value = (
+        personal_response(bridge_count=1)
+    )
+    section_repository.save_with_lines.side_effect = (
+        lambda section, lines: section
+    )
+
+    await service.generate_sections(
+        [industry, stock],
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    source = ai_client.generate_personal_sections.await_args.args[0]
+    assert "대상: 반도체" in source
+    assert "지수값: 12345.67" in source
+    assert "등락: 1.01% 하락" in source
+    assert "대상: 삼성전자" in source
+    assert "종가: 270000원" in source
+    assert "등락: 3.65% 상승" in source
+    service.price_repository.find_latest_stock_prices.assert_called_once_with(
+        ["005930"],
+        as_of=PERIOD_END,
+    )
+    service.price_repository.find_latest_industry_prices.assert_called_once_with(
+        ["SEMI"],
+        as_of=PERIOD_END,
     )
 
 

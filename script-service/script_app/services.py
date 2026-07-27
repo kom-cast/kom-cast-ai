@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from script_app.ai_client import AiClient, AiResponseInvalidError
 from script_app.models import (
+    IndustryPrice,
+    MarketPrice,
     NewsArticle,
     Section,
     SectionTargetType,
@@ -17,6 +19,7 @@ from script_app.models import (
 )
 from script_app.repositories import (
     NewsRepository,
+    PriceRepository,
     SectionLineData,
     SectionRepository,
     ScriptDocumentRepository,
@@ -400,9 +403,13 @@ class PersonalSectionService:
     def __init__(
         self,
         section_repository: SectionRepository,
+        price_repository: PriceRepository,
+        target_repository: TargetRepository,
         ai_client: AiClient,
     ) -> None:
         self.section_repository = section_repository
+        self.price_repository = price_repository
+        self.target_repository = target_repository
         self.ai_client = ai_client
 
     async def generate_sections(
@@ -421,9 +428,47 @@ class PersonalSectionService:
                 [section.id for section in content_sections]
             )
         )
+        stock_codes = [
+            section.stock_code
+            for section in content_sections
+            if section.section_type == SectionType.STOCK
+            and section.stock_code is not None
+        ]
+        industry_codes = [
+            section.industry_code
+            for section in content_sections
+            if section.section_type == SectionType.INDUSTRY
+            and section.industry_code is not None
+        ]
+        stock_prices = (
+            self.price_repository.find_latest_stock_prices(
+                stock_codes,
+                as_of=period_end,
+            )
+        )
+        industry_prices = (
+            self.price_repository.find_latest_industry_prices(
+                industry_codes,
+                as_of=period_end,
+            )
+        )
+        stocks = self.target_repository.find_stocks(stock_codes)
+        industries = self.target_repository.find_industries(
+            industry_codes
+        )
         source = self._build_source(
             content_sections,
             lines_by_section,
+            stock_prices=stock_prices,
+            industry_prices=industry_prices,
+            stock_names={
+                code: stock.corp_name
+                for code, stock in stocks.items()
+            },
+            industry_names={
+                code: industry.industry_name
+                for code, industry in industries.items()
+            },
         )
         response = await self.ai_client.generate_personal_sections(
             source,
@@ -489,11 +534,30 @@ class PersonalSectionService:
     def _build_source(
         content_sections: list[Section],
         lines_by_section: dict,
+        stock_prices: dict[str, MarketPrice],
+        industry_prices: dict[str, IndustryPrice],
+        stock_names: dict[str, str],
+        industry_names: dict[str, str],
     ) -> str:
         parts = [
             f"콘텐츠 섹션 수: {len(content_sections)}",
             "다음 순서의 콘텐츠를 자연스럽게 연결하세요.",
         ]
+        price_parts = PersonalSectionService._build_price_parts(
+            content_sections=content_sections,
+            stock_prices=stock_prices,
+            industry_prices=industry_prices,
+            stock_names=stock_names,
+            industry_names=industry_names,
+        )
+
+        if price_parts:
+            parts.extend(
+                [
+                    "오프닝에 반영할 최근 시세 현황:",
+                    *price_parts,
+                ]
+            )
 
         for index, section in enumerate(
             content_sections,
@@ -521,6 +585,108 @@ class PersonalSectionService:
             )
 
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _build_price_parts(
+        content_sections: list[Section],
+        stock_prices: dict[str, MarketPrice],
+        industry_prices: dict[str, IndustryPrice],
+        stock_names: dict[str, str],
+        industry_names: dict[str, str],
+    ) -> list[str]:
+        parts = []
+
+        for section in content_sections:
+            if (
+                section.section_type == SectionType.STOCK
+                and section.stock_code is not None
+            ):
+                price = stock_prices.get(section.stock_code)
+
+                if price is not None:
+                    parts.append(
+                        "\n".join(
+                            [
+                                "종목 시세",
+                                (
+                                    "대상: "
+                                    f"{stock_names.get(section.stock_code, section.stock_code)}"
+                                ),
+                                f"종목 코드: {section.stock_code}",
+                                (
+                                    "기준 시각: "
+                                    f"{price.traded_at.isoformat()}"
+                                ),
+                                (
+                                    "종가: "
+                                    f"{PersonalSectionService._format_number(price.close_price)}원"
+                                ),
+                                (
+                                    "등락: "
+                                    f"{PersonalSectionService._format_change(price.change_rate)}"
+                                ),
+                            ]
+                        )
+                    )
+            elif (
+                section.section_type == SectionType.INDUSTRY
+                and section.industry_code is not None
+            ):
+                price = industry_prices.get(
+                    section.industry_code
+                )
+
+                if price is not None:
+                    parts.append(
+                        "\n".join(
+                            [
+                                "업종 시세",
+                                (
+                                    "대상: "
+                                    f"{industry_names.get(section.industry_code, section.industry_code)}"
+                                ),
+                                (
+                                    "업종 코드: "
+                                    f"{section.industry_code}"
+                                ),
+                                (
+                                    "기준 시각: "
+                                    f"{price.traded_at.isoformat()}"
+                                ),
+                                (
+                                    "지수값: "
+                                    f"{PersonalSectionService._format_number(price.index_value)}"
+                                ),
+                                (
+                                    "등락: "
+                                    f"{PersonalSectionService._format_change(price.change_rate)}"
+                                ),
+                            ]
+                        )
+                    )
+
+        return parts
+
+    @staticmethod
+    def _format_number(value) -> str:
+        formatted = format(value, "f")
+
+        if "." in formatted:
+            formatted = formatted.rstrip("0").rstrip(".")
+
+        return formatted
+
+    @staticmethod
+    def _format_change(value) -> str:
+        rate = PersonalSectionService._format_number(abs(value))
+
+        if value > 0:
+            return f"{rate}% 상승"
+
+        if value < 0:
+            return f"{rate}% 하락"
+
+        return "보합"
 
 
 @dataclass

@@ -7,6 +7,7 @@ from script_app.config import get_script_generation_settings
 from script_app.database import SessionFactory
 from script_app.repositories import (
     NewsRepository,
+    PriceRepository,
     ScriptDocumentRepository,
     SectionRepository,
     TargetRepository,
@@ -33,7 +34,9 @@ def create_script_generation_service(
     ai_client = create_openai_client()
     generation_settings = get_script_generation_settings()
     news_repository = NewsRepository(session)
+    price_repository = PriceRepository(session)
     section_repository = SectionRepository(session)
+    target_repository = TargetRepository(session)
 
     return ScriptGenerationService(
         session=session,
@@ -43,7 +46,7 @@ def create_script_generation_service(
         ),
         common_section_service=CommonSectionService(
             news_repository=news_repository,
-            target_repository=TargetRepository(session),
+            target_repository=target_repository,
             section_repository=section_repository,
             ai_client=ai_client,
             max_concurrency=(
@@ -52,6 +55,8 @@ def create_script_generation_service(
         ),
         personal_section_service=PersonalSectionService(
             section_repository=section_repository,
+            price_repository=price_repository,
+            target_repository=target_repository,
             ai_client=ai_client,
         ),
     )

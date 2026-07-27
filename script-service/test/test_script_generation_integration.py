@@ -23,6 +23,7 @@ from script_app.models import (
 )
 from script_app.repositories import (
     NewsRepository,
+    PriceRepository,
     ScriptDocumentRepository,
     SectionRepository,
     TargetRepository,
@@ -179,6 +180,8 @@ def create_generation_service(
         ),
         personal_section_service=PersonalSectionService(
             section_repository=section_repository,
+            price_repository=PriceRepository(session),
+            target_repository=TargetRepository(session),
             ai_client=ai_client,
         ),
     )
