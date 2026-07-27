@@ -154,6 +154,8 @@ async def test_generates_personal_sections_in_one_ai_call() -> None:
 
     result = await service.generate_sections(
         [industry, stock],
+        stock_codes=["005930"],
+        industry_codes=["SEMI"],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
@@ -193,6 +195,8 @@ async def test_single_content_section_has_no_bridge() -> None:
 
     result = await service.generate_sections(
         [stock],
+        stock_codes=["005930"],
+        industry_codes=[],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
@@ -234,6 +238,8 @@ async def test_personal_section_source_contains_ordered_content() -> None:
 
     await service.generate_sections(
         [industry, stock],
+        stock_codes=["005930"],
+        industry_codes=["SEMI"],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
@@ -279,6 +285,16 @@ async def test_personal_section_source_contains_latest_prices() -> None:
     )
     market_price.close_price = Decimal("270000")
     market_price.change_rate = Decimal("3.65")
+    newsless_market_price = Mock(spec=MarketPrice)
+    newsless_market_price.traded_at = datetime(
+        2026,
+        7,
+        22,
+        15,
+        tzinfo=timezone.utc,
+    )
+    newsless_market_price.close_price = Decimal("210000")
+    newsless_market_price.change_rate = Decimal("-0.75")
     industry_price = Mock(spec=IndustryPrice)
     industry_price.traded_at = datetime(
         2026,
@@ -290,17 +306,21 @@ async def test_personal_section_source_contains_latest_prices() -> None:
     industry_price.index_value = Decimal("12345.67")
     industry_price.change_rate = Decimal("-1.01")
     service.price_repository.find_latest_stock_prices.return_value = {
-        "005930": market_price
+        "005930": market_price,
+        "000660": newsless_market_price,
     }
     service.price_repository.find_latest_industry_prices.return_value = {
         "SEMI": industry_price
     }
     stock_target = Mock(spec=Stock)
     stock_target.corp_name = "삼성전자"
+    newsless_stock_target = Mock(spec=Stock)
+    newsless_stock_target.corp_name = "SK하이닉스"
     industry_target = Mock(spec=Industry)
     industry_target.industry_name = "반도체"
     service.target_repository.find_stocks.return_value = {
-        "005930": stock_target
+        "005930": stock_target,
+        "000660": newsless_stock_target,
     }
     service.target_repository.find_industries.return_value = {
         "SEMI": industry_target
@@ -314,6 +334,8 @@ async def test_personal_section_source_contains_latest_prices() -> None:
 
     await service.generate_sections(
         [industry, stock],
+        stock_codes=["005930", "000660"],
+        industry_codes=["SEMI"],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
@@ -325,8 +347,11 @@ async def test_personal_section_source_contains_latest_prices() -> None:
     assert "대상: 삼성전자" in source
     assert "종가: 270000원" in source
     assert "등락: 3.65% 상승" in source
+    assert "대상: SK하이닉스" in source
+    assert "종가: 210000원" in source
+    assert "등락: 0.75% 하락" in source
     service.price_repository.find_latest_stock_prices.assert_called_once_with(
-        ["005930"],
+        ["005930", "000660"],
         as_of=PERIOD_END,
     )
     service.price_repository.find_latest_industry_prices.assert_called_once_with(
@@ -345,6 +370,8 @@ async def test_rejects_empty_content_sections() -> None:
     ):
         await service.generate_sections(
             [],
+            stock_codes=[],
+            industry_codes=[],
             period_start=PERIOD_START,
             period_end=PERIOD_END,
         )

@@ -178,6 +178,18 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         personal_service.generate_sections.await_args.args[0]
     )
     assert content_sections == [industry, stock]
+    assert (
+        personal_service.generate_sections.await_args.kwargs[
+            "stock_codes"
+        ]
+        == ["005930"]
+    )
+    assert (
+        personal_service.generate_sections.await_args.kwargs[
+            "industry_codes"
+        ]
+        == ["SEMI"]
+    )
     assert result.scripts[0].reused is False
     assert result.failures == []
     assert session.commit.call_count == 3
