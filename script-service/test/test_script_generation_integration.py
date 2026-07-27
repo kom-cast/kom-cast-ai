@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
@@ -11,6 +12,8 @@ from script_app.ai_client import AiClient
 from script_app.database import Base
 from script_app.models import (
     Industry,
+    IndustryPrice,
+    MarketPrice,
     NewsArticle,
     NewsIndustryMapping,
     NewsStockMapping,
@@ -90,7 +93,64 @@ def add_generation_data(session: Session) -> None:
         title="반도체 업종 뉴스",
         body="반도체 업종의 설비 투자가 확대되고 있다.",
     )
-    session.add_all([industry, stock, stock_news, industry_news])
+    price_timestamp = datetime(
+        2026,
+        7,
+        22,
+        15,
+        tzinfo=timezone.utc,
+    )
+    stored_at = datetime.now(timezone.utc)
+    market_price = MarketPrice(
+        stock_code="005930",
+        traded_at=price_timestamp,
+        interval="DAILY",
+        open_price=Decimal("269000"),
+        high_price=Decimal("273000"),
+        low_price=Decimal("263000"),
+        close_price=Decimal("270000"),
+        volume=16011816,
+        change_rate=Decimal("3.65"),
+        trading_value=4308084851750,
+        market_cap=1578495224160000,
+        vwap=None,
+        provider="KOSCOM",
+        raw_external_id="market-price-1",
+        created_at=stored_at,
+        updated_at=stored_at,
+    )
+    industry_price = IndustryPrice(
+        industry_code="SEMI",
+        traded_at=price_timestamp,
+        index_value=Decimal("12345.67"),
+        change_amount=Decimal("-123.45"),
+        change_rate=Decimal("-1.01"),
+        open_value=None,
+        high_value=None,
+        low_value=None,
+        volume=987654321,
+        trading_value=12345678901234,
+        market_cap=None,
+        market_cap_free_float=None,
+        shares_outstanding=None,
+        foreign_ownership_rate=None,
+        short_sale_volume=None,
+        short_sale_value=None,
+        provider="KOSCOM",
+        raw_external_id="SEMI:20260723",
+        created_at=stored_at,
+        updated_at=stored_at,
+    )
+    session.add_all(
+        [
+            industry,
+            stock,
+            stock_news,
+            industry_news,
+            market_price,
+            industry_price,
+        ]
+    )
     session.flush()
     session.add_all(
         [
@@ -222,6 +282,15 @@ async def test_full_generation_and_completed_document_reuse(
     ]
     assert ai_client.generate_common_section.await_count == 2
     ai_client.generate_personal_sections.assert_awaited_once()
+    personal_source = (
+        ai_client.generate_personal_sections.await_args.args[0]
+    )
+    assert "대상: 반도체" in personal_source
+    assert "지수값: 12345.67" in personal_source
+    assert "등락: 1.01% 하락" in personal_source
+    assert "대상: 삼성전자" in personal_source
+    assert "종가: 270000원" in personal_source
+    assert "등락: 3.65% 상승" in personal_source
 
     second_response = await service.generate(
         [USER_ID],
