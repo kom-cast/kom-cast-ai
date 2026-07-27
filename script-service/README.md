@@ -108,9 +108,16 @@ GET /health
 3. 생성 대상 사용자의 관심 종목과 업종을 일괄 조회합니다.
 4. 종목·업종별 뉴스를 기간 조건으로 일괄 조회합니다.
 5. 기존 공통 섹션을 재사용하고 없는 섹션만 OpenAI로 생성합니다.
-6. 사용자별 오프닝, 브리지, 클로징을 한 번의 OpenAI 호출로 생성합니다.
-7. 업종 코드 오름차순 후 종목 코드 오름차순으로 콘텐츠를 조립합니다.
-8. 사용자별 DB 커밋이 완료된 결과만 성공으로 반환합니다.
+6. 관심 종목·업종별로 조회 종료 시각 이전의 최신 KOSCOM 시세를 조회합니다.
+7. 시세 현황을 포함해 사용자별 오프닝, 브리지, 클로징을 한 번의 OpenAI 호출로 생성합니다.
+8. 업종 코드 오름차순 후 종목 코드 오름차순으로 콘텐츠를 조립합니다.
+9. 사용자별 DB 커밋이 완료된 결과만 성공으로 반환합니다.
+
+오프닝 시세는 종목의 `DAILY` 데이터와 업종 일별 데이터 중
+`traded_at < end_at` 조건을 만족하는 가장 최근 행을 사용합니다. 휴장일에는
+조회 종료 시각 이전의 마지막 거래일 시세를 사용할 수 있으며, 시세가 없는
+관심 대상의 가격이나 등락률은 오프닝에서 생략합니다. 관련 뉴스가 없는 관심
+대상도 시세가 존재하면 오프닝 시세 현황에는 포함됩니다.
 
 ## 오류 코드
 
@@ -213,6 +220,7 @@ python -m pip install -r requirements.txt
 - 사용자별 관심 종목과 관심 업종
 - 종목 및 업종 마스터
 - 뉴스 요약과 종목·업종 매핑
+- 종목 일별 시세와 업종 일별 지수 시세
 
 `Base.metadata.create_all()`은 없는 테이블을 생성할 수 있지만 기존 테이블의 컬럼, 제약조건 또는 인덱스를 마이그레이션하지 않습니다. 운영 DB 변경은 별도 스키마 관리 절차로 수행해야 합니다.
 
@@ -267,6 +275,26 @@ erDiagram
         string industry_code PK, FK
     }
 
+    MARKET_PRICES {
+        uuid id PK
+        string stock_code FK
+        datetime traded_at
+        string interval
+        numeric close_price
+        numeric change_rate
+        string provider
+    }
+
+    INDUSTRY_PRICES {
+        uuid id PK
+        string industry_code FK
+        datetime traded_at
+        numeric index_value
+        numeric change_amount
+        numeric change_rate
+        string provider
+    }
+
     SECTIONS {
         uuid id PK
         string section_type
@@ -310,6 +338,8 @@ erDiagram
     STOCKS ||--o{ NEWS_STOCK_MAPPINGS : maps
     NEWS_ARTICLES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
     INDUSTRIES ||--o{ NEWS_INDUSTRY_MAPPINGS : maps
+    STOCKS ||--o{ MARKET_PRICES : priced_by
+    INDUSTRIES ||--o{ INDUSTRY_PRICES : priced_by
     STOCKS o|--o{ SECTIONS : stock_target
     INDUSTRIES o|--o{ SECTIONS : industry_target
     SECTIONS ||--o{ SECTION_LINES : contains
@@ -325,6 +355,8 @@ erDiagram
 | `user_industries`, `user_stocks` | 사용자별 관심 업종·종목 |
 | `news_articles` | 생성 입력으로 사용하는 뉴스 원문과 요약 정보 |
 | `news_industry_mappings`, `news_stock_mappings` | 뉴스와 업종·종목의 다대다 관계 |
+| `market_prices` | 종목별 일별 종가와 등락률 등 공급자 정규화 시세 |
+| `industry_prices` | 업종별 일별 지수값과 등락률 등 공급자 정규화 시세 |
 | `sections` | 공통 콘텐츠 또는 사용자별 오프닝·브리지·클로징 |
 | `section_lines` | 섹션에 포함된 코스·코미 발화와 발화 순서 |
 | `script_documents` | 사용자와 조회 기간별 생성 문서 및 생성 상태 |
