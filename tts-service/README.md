@@ -11,7 +11,7 @@ tts-service/
 ├── tts_app/
 │   ├── api/         # 라우터 (POST /briefings)
 │   ├── audio/       # 합성된 라인들을 하나의 트랙으로 믹싱 + 오디오 저장소(local/ncp)
-│   ├── script/      # 요청 스키마 (Script, DialogueLine)
+│   ├── script/      # 요청 스키마 (Script, DialogueLine, BriefingTarget)
 │   ├── tts/          # Typecast API 연동 합성기
 │   ├── characters.py # 화자(코스/코미) → 보이스 ID 매핑
 │   ├── config.py     # 환경 변수 설정
@@ -122,15 +122,14 @@ pytest
 }
 ```
 
-산업군 브리핑 예시:
+산업군/사용자 지정 브리핑은 `target`만 다음과 같이 바뀝니다.
 
 ```json
-{
-  "target": { "type": "INDUSTRY", "industry_code": "IT" }
-}
+{ "type": "INDUSTRY", "industry_code": "IT" }
+{ "type": "USER" }
 ```
 
-동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL(`/static/audio/{key}.mp3`)과 세그먼트별 타이밍 정보가 포함됩니다.
+동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL과 세그먼트별 타이밍 정보가 포함됩니다. `audioUrl`은 [오디오 저장소](#오디오-저장소) 백엔드에 따라 `/static/audio/{key}.mp3`(local) 또는 `{AUDIO_CDN_BASE_URL}/{key}.mp3`(ncp) 형태입니다.
 
 응답 예시:
 
@@ -162,11 +161,4 @@ pytest
 }
 ```
 
-## 배포 전 TODO 체크리스트
 
-- [ ] 통합 앱 엔트리포인트([`main.py`](../main.py))의 CORS `allow_origins`를 로컬 Vite 개발 서버(`localhost:5173`) 대신 실제 프론트엔드 배포 도메인으로 교체
-- [x] 오디오 저장소를 로컬 디스크(`static/audio`)에서 오브젝트 스토리지 + CDN으로 교체 가능하도록 `AUDIO_BACKEND` 스위치 추가(`tts_app/audio/storage.py`). 배포 시 `AUDIO_BACKEND=ncp` 및 관련 환경변수 설정 필요
-- [ ] `TYPECAST_API_KEY` 등 시크릿을 `.env` 파일 대신 배포 환경의 시크릿 매니저(예: AWS Secrets Manager, Vault)로 관리
-- [ ] 실행 커맨드에서 `--reload` 제거하고, 워커 수를 지정한 프로덕션 ASGI 실행(uvicorn workers 또는 gunicorn) 구성
-- [ ] `/briefings` 엔드포인트에 인증/인가 및 요청 제한(rate limit) 추가
-- [ ] 로깅 및 모니터링(에러 트래킹, 헬스체크 연동) 구성
