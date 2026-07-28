@@ -15,6 +15,7 @@ from script_app.repositories import (
 )
 from script_app.services import (
     CommonSectionService,
+    NewsSelector,
     PersonalSectionService,
     ScriptGenerationService,
 )
@@ -49,6 +50,7 @@ def create_script_generation_service(
             target_repository=target_repository,
             section_repository=section_repository,
             ai_client=ai_client,
+            news_selector=NewsSelector(max_articles=3),
             max_concurrency=(
                 generation_settings.max_concurrency
             ),

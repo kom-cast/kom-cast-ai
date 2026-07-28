@@ -274,9 +274,9 @@ async def main() -> None:
     parser.add_argument(
         "--max-news-per-target",
         type=int,
+        default=3,
         help=(
-            "대상별 최대 뉴스 수. 생략하면 파일의 뉴스를 "
-            "모두 사용합니다."
+            "대상별 최대 뉴스 수. 기본값은 3입니다."
         ),
     )
     args = parser.parse_args()

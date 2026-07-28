@@ -1,6 +1,7 @@
 import asyncio
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from openai import APITimeoutError, OpenAIError
@@ -696,6 +697,364 @@ class CommonSectionResult:
     failed_industry_codes: set[str] = field(default_factory=set)
 
 
+@dataclass(frozen=True)
+class RankedNews:
+    article: NewsArticle
+    score: int
+    topic: str
+
+
+class NewsSelector:
+    ADVERTISEMENT_KEYWORDS = (
+        "스탁론",
+        "무료상담",
+        "최저금리",
+        "최대 4배",
+        "계좌 부스터",
+        "수익률 인증",
+        "급등주 추천",
+    )
+    GENERIC_TITLE_KEYWORDS = (
+        "인기검색",
+        "순매수 상위종목",
+        "오늘의 이슈&테마",
+        "주요이슈 점검",
+    )
+    MATERIAL_KEYWORDS = {
+        "실적": 12,
+        "영업이익": 12,
+        "매출": 10,
+        "수주": 12,
+        "공급 계약": 12,
+        "계약": 8,
+        "투자": 7,
+        "증설": 10,
+        "생산": 7,
+        "인수": 10,
+        "합병": 10,
+        "유상증자": 10,
+        "배당": 10,
+        "출시": 7,
+        "인증": 7,
+        "소송": 10,
+        "제재": 10,
+        "리콜": 10,
+    }
+    TOPIC_KEYWORDS = (
+        (
+            "EARNINGS",
+            ("실적", "매출", "영업이익", "수익성"),
+        ),
+        (
+            "CONTRACT",
+            ("수주", "공급 계약", "계약", "고객"),
+        ),
+        (
+            "INVESTMENT",
+            ("투자", "증설", "생산", "공장"),
+        ),
+        (
+            "PRODUCT",
+            ("출시", "신제품", "인증", "서비스"),
+        ),
+        (
+            "MARKET",
+            ("주가", "급락", "상승", "하락", "거래량"),
+        ),
+        (
+            "COMPETITION",
+            ("경쟁", "점유율", "추격", "공급 과잉"),
+        ),
+        (
+            "POLICY",
+            ("규제", "제재", "정책", "관세"),
+        ),
+    )
+    NUMBER_PATTERN = re.compile(
+        r"\d+(?:\.\d+)?"
+        r"(?:%|퍼센트|원|억원|조원|달러|대|건|명)"
+    )
+    TITLE_PREFIX_PATTERN = re.compile(
+        r"\[(?:속보|특징주|단독|종합|마켓뷰)[^\]]*\]"
+    )
+    TITLE_SUFFIX_PATTERN = re.compile(r"\(종합\d*\)")
+    NON_WORD_PATTERN = re.compile(r"[^0-9A-Za-z가-힣]")
+    SUMMARY_TOKEN_PATTERN = re.compile(
+        r"[0-9A-Za-z가-힣]{2,}"
+    )
+    SUMMARY_STOP_WORDS = {
+        "관련",
+        "대한",
+        "통해",
+        "위해",
+        "있는",
+        "있다",
+        "했다",
+        "한다",
+        "이번",
+        "최근",
+        "기자",
+        "뉴스",
+        "전망",
+    }
+
+    def __init__(
+        self,
+        max_articles: int = 3,
+        summary_overlap_threshold: float = 0.6,
+    ) -> None:
+        if max_articles <= 0:
+            raise ValueError(
+                "max_articles must be greater than 0"
+            )
+
+        if not 0 < summary_overlap_threshold <= 1:
+            raise ValueError(
+                "summary_overlap_threshold must be "
+                "greater than 0 and at most 1"
+            )
+
+        self.max_articles = max_articles
+        self.summary_overlap_threshold = (
+            summary_overlap_threshold
+        )
+
+    def select(
+        self,
+        articles: list[NewsArticle],
+        target_name: str,
+        target_code: str,
+        as_of: datetime,
+    ) -> list[NewsArticle]:
+        ranked = sorted(
+            (
+                self._rank(
+                    article,
+                    target_name=target_name,
+                    target_code=target_code,
+                    as_of=as_of,
+                )
+                for article in articles
+                if not self._is_advertisement(article)
+            ),
+            key=lambda item: (
+                -item.score,
+                -item.article.published_at.timestamp(),
+                item.article.title,
+                str(item.article.id),
+            ),
+        )
+        deduplicated = self._deduplicate(ranked)
+        selected: list[RankedNews] = []
+        selected_article_keys = set()
+        selected_topics = set()
+
+        for item in deduplicated:
+            if item.topic in selected_topics:
+                continue
+
+            selected.append(item)
+            selected_article_keys.add(id(item.article))
+            selected_topics.add(item.topic)
+
+            if len(selected) == self.max_articles:
+                break
+
+        if len(selected) < self.max_articles:
+            for item in deduplicated:
+                if id(item.article) in selected_article_keys:
+                    continue
+
+                selected.append(item)
+                selected_article_keys.add(id(item.article))
+
+                if len(selected) == self.max_articles:
+                    break
+
+        return [item.article for item in selected]
+
+    def _rank(
+        self,
+        article: NewsArticle,
+        target_name: str,
+        target_code: str,
+        as_of: datetime,
+    ) -> RankedNews:
+        summary = article.summary or article.body
+        text = f"{article.title} {summary}"
+        score = 0
+
+        if target_name and target_name in article.title:
+            score += 30
+
+        if target_code and target_code in article.title:
+            score += 20
+
+        if target_name and target_name in summary:
+            score += 15
+
+        if target_code and target_code in summary:
+            score += 10
+
+        score += min(
+            30,
+            sum(
+                weight
+                for keyword, weight
+                in self.MATERIAL_KEYWORDS.items()
+                if keyword in text
+            ),
+        )
+        score += min(
+            10,
+            len(self.NUMBER_PATTERN.findall(text)) * 2,
+        )
+        score += self._recency_score(
+            article.published_at,
+            as_of,
+        )
+
+        if any(
+            keyword in article.title
+            for keyword in self.GENERIC_TITLE_KEYWORDS
+        ):
+            score -= 30
+
+        return RankedNews(
+            article=article,
+            score=score,
+            topic=self._classify_topic(text),
+        )
+
+    def _deduplicate(
+        self,
+        ranked: list[RankedNews],
+    ) -> list[RankedNews]:
+        result = []
+        seen_news_codes = set()
+        seen_titles = set()
+        selected_summary_tokens: list[set[str]] = []
+
+        for item in ranked:
+            news_code = item.article.news_code
+            normalized_title = self._normalize_title(
+                item.article.title
+            )
+            summary_tokens = self._summary_tokens(
+                item.article.summary or item.article.body
+            )
+
+            if (
+                news_code
+                and news_code in seen_news_codes
+            ):
+                continue
+
+            if normalized_title in seen_titles:
+                continue
+
+            if any(
+                self._summary_overlap(
+                    summary_tokens,
+                    existing_tokens,
+                )
+                >= self.summary_overlap_threshold
+                for existing_tokens in selected_summary_tokens
+            ):
+                continue
+
+            result.append(item)
+            seen_titles.add(normalized_title)
+            selected_summary_tokens.append(summary_tokens)
+
+            if news_code:
+                seen_news_codes.add(news_code)
+
+        return result
+
+    def _is_advertisement(
+        self,
+        article: NewsArticle,
+    ) -> bool:
+        text = (
+            f"{article.title} "
+            f"{article.summary or article.body}"
+        )
+        return any(
+            keyword in text
+            for keyword in self.ADVERTISEMENT_KEYWORDS
+        )
+
+    def _normalize_title(self, title: str) -> str:
+        normalized = self.TITLE_PREFIX_PATTERN.sub("", title)
+        normalized = self.TITLE_SUFFIX_PATTERN.sub(
+            "",
+            normalized,
+        )
+        return self.NON_WORD_PATTERN.sub(
+            "",
+            normalized,
+        ).lower()
+
+    def _summary_tokens(self, summary: str) -> set[str]:
+        return {
+            token.lower()
+            for token in self.SUMMARY_TOKEN_PATTERN.findall(
+                summary
+            )
+            if token not in self.SUMMARY_STOP_WORDS
+        }
+
+    @staticmethod
+    def _summary_overlap(
+        first: set[str],
+        second: set[str],
+    ) -> float:
+        if not first or not second:
+            return 0
+
+        return len(first & second) / len(first | second)
+
+    def _classify_topic(self, text: str) -> str:
+        for topic, keywords in self.TOPIC_KEYWORDS:
+            if any(keyword in text for keyword in keywords):
+                return topic
+
+        return "OTHER"
+
+    @staticmethod
+    def _recency_score(
+        published_at: datetime,
+        as_of: datetime,
+    ) -> int:
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(
+                tzinfo=timezone.utc
+            )
+
+        if as_of.tzinfo is None:
+            as_of = as_of.replace(tzinfo=timezone.utc)
+
+        age_hours = max(
+            0,
+            (as_of - published_at).total_seconds() / 3600,
+        )
+
+        if age_hours <= 6:
+            return 20
+
+        if age_hours <= 12:
+            return 15
+
+        if age_hours <= 24:
+            return 10
+
+        if age_hours <= 72:
+            return 5
+
+        return 0
+
+
 class CommonSectionService:
     def __init__(
         self,
@@ -703,6 +1062,7 @@ class CommonSectionService:
         target_repository: TargetRepository,
         section_repository: SectionRepository,
         ai_client: AiClient,
+        news_selector: NewsSelector | None = None,
         max_concurrency: int = 5,
     ) -> None:
         if max_concurrency <= 0:
@@ -714,6 +1074,7 @@ class CommonSectionService:
         self.target_repository = target_repository
         self.section_repository = section_repository
         self.ai_client = ai_client
+        self.news_selector = news_selector or NewsSelector()
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
     async def prepare_sections(
@@ -786,6 +1147,7 @@ class CommonSectionService:
             },
             targets=targets,
             no_news_codes=result.no_news_stock_codes,
+            as_of=period_end,
         )
         self._collect_targets(
             section_type=SectionType.INDUSTRY,
@@ -797,6 +1159,7 @@ class CommonSectionService:
             },
             targets=targets,
             no_news_codes=result.no_news_industry_codes,
+            as_of=period_end,
         )
 
         responses = await asyncio.gather(
@@ -900,8 +1263,8 @@ class CommonSectionService:
             )
         )
 
-    @staticmethod
     def _collect_targets(
+        self,
         section_type: SectionType,
         codes: list[str],
         news_by_code: dict[str, list[NewsArticle]],
@@ -910,16 +1273,23 @@ class CommonSectionService:
             tuple[SectionType, str, str, list[NewsArticle]]
         ],
         no_news_codes: set[str],
+        as_of: datetime,
     ) -> None:
         for code in codes:
-            news_articles = news_by_code.get(code, [])
+            target_name = names_by_code.get(code, code)
+            news_articles = self.news_selector.select(
+                news_by_code.get(code, []),
+                target_name=target_name,
+                target_code=code,
+                as_of=as_of,
+            )
 
             if news_articles:
                 targets.append(
                     (
                         section_type,
                         code,
-                        names_by_code.get(code, code),
+                        target_name,
                         news_articles,
                     )
                 )
