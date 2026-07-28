@@ -79,7 +79,10 @@ class NcpObjectStorage(AudioStorage):
                 Bucket=self.bucket, Key=self._manifest_key(cache_key)
             )
         except ClientError as error:
-            if error.response["Error"]["Code"] in ("NoSuchKey", "404"):
+            # NCP/S3 호환 스토리지는 s3:ListBucket 권한이 없으면 존재하지 않는 키의
+            # GetObject를 진짜 404(NoSuchKey) 대신 403(AccessDenied)으로 응답한다.
+            # https://guide-fin.ncloud-docs.com/docs/storage-storage-8-2
+            if error.response["Error"]["Code"] in ("NoSuchKey", "404", "AccessDenied"):
                 return None
             raise
         return json.loads(obj["Body"].read())

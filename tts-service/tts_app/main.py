@@ -9,7 +9,11 @@ app = FastAPI(title="komcast TTS service")
 app.add_middleware(
     CORSMiddleware,
     # TODO: Vite 개발 서버 기본 포트. 배포 시 실제 프론트 도메인으로 교체.
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
