@@ -7,6 +7,8 @@ from script_app.ai_client import (
     AiResponseInvalidError,
     OpenAiClient,
     create_openai_client,
+    load_common_section_prompt,
+    load_personal_sections_prompt,
 )
 from script_app.config import ModelSettings, OpenAiSettings
 from script_app.schemas import (
@@ -25,6 +27,48 @@ class TestOpenAiClient:
             personal_model="personal-model",
             personal_reasoning_effort="none",
         )
+
+    def test_prompts_define_target_reading_times(self) -> None:
+        common_prompt = load_common_section_prompt()
+        personal_prompt = load_personal_sections_prompt()
+
+        assert "약 1분" in common_prompt
+        assert "300~350자" in common_prompt
+        assert "공백 포함" in common_prompt
+        assert "최대 10건" in common_prompt
+        assert "핵심 사건 2~3개만 선정" in common_prompt
+        assert "선정하지 않은 뉴스는 생략" in common_prompt
+        assert "전체 lines는 2~4개의 발화" in common_prompt
+        assert "하나의 설명 흐름으로 압축" in common_prompt
+        assert "모든 사업 영역을 빠짐없이" in common_prompt
+        assert "확인된 사실처럼 바꾸지 마세요" in common_prompt
+        assert "업종 전체의 수요" in common_prompt
+        assert "해당 기업의 실적과 사업" in common_prompt
+        assert "지난 24시간의 핵심 뉴스" in common_prompt
+        assert "오늘 이후 확인할 관전 포인트" in common_prompt
+        assert "호재나 악재로 단정하지 말고" in common_prompt
+        assert "글자 수를 스스로 확인" in common_prompt
+        assert "중요도가 가장 낮은 세부 정보" in common_prompt
+        assert "기호 % 대신 퍼센트" in common_prompt
+        assert "opening의 두 발화는 합계 약 1분" in (
+            personal_prompt
+        )
+        assert "코스와 코미의 짧은 상호 인사" in (
+            personal_prompt
+        )
+        assert "모든 브리핑은 아침" in personal_prompt
+        assert "오늘 시장에서 확인할 체크리스트" in (
+            personal_prompt
+        )
+        assert "코스피" not in personal_prompt
+        assert "코스닥" not in personal_prompt
+        assert "관심 키워드" not in personal_prompt
+        assert "약 10초" in personal_prompt
+        assert "50~60자" in personal_prompt
+        assert "closing은 약 30초" in personal_prompt
+        assert "150~175자" in personal_prompt
+        assert "체크리스트 2~3개" in personal_prompt
+        assert "기호 % 대신 퍼센트" in personal_prompt
 
     def test_create_client_applies_request_timeout(
         self,
