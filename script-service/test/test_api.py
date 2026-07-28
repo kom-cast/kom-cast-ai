@@ -10,6 +10,10 @@ from script_app.schemas import (
     ScriptFailureCode,
     ScriptFailureResult,
 )
+from script_app.services import (
+    ResourceInUseError,
+    ResourceNotFoundError,
+)
 
 
 client = TestClient(app)
@@ -165,3 +169,73 @@ def test_generate_scripts_returns_500_for_request_wide_failure(
     )
 
     assert response.status_code == 500
+
+
+def test_delete_script_returns_no_content(monkeypatch) -> None:
+    script_id = UUID("1ee14e43-fb5c-4225-8cb3-dc84a31e8423")
+    fake_service = Mock()
+    monkeypatch.setattr(
+        (
+            "script_app.api.scripts."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/scripts/{script_id}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    fake_service.delete_script.assert_called_once_with(script_id)
+
+
+def test_delete_script_returns_not_found(monkeypatch) -> None:
+    fake_service = Mock()
+    fake_service.delete_script.side_effect = ResourceNotFoundError
+    monkeypatch.setattr(
+        (
+            "script_app.api.scripts."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/scripts/{UUID(int=1)}")
+
+    assert response.status_code == 404
+
+
+def test_delete_section_returns_no_content(monkeypatch) -> None:
+    section_id = UUID("2ee14e43-fb5c-4225-8cb3-dc84a31e8423")
+    fake_service = Mock()
+    monkeypatch.setattr(
+        (
+            "script_app.api.sections."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/sections/{section_id}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    fake_service.delete_section.assert_called_once_with(section_id)
+
+
+def test_delete_section_returns_conflict_when_in_use(
+    monkeypatch,
+) -> None:
+    fake_service = Mock()
+    fake_service.delete_section.side_effect = ResourceInUseError
+    monkeypatch.setattr(
+        (
+            "script_app.api.sections."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/sections/{UUID(int=1)}")
+
+    assert response.status_code == 409

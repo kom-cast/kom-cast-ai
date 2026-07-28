@@ -250,3 +250,39 @@ def test_retry_failed_script_clears_personal_sections(
     assert result.status == ScriptStatus.GENERATING
     assert repository.find_sections(script.id) == []
     assert session.get(Section, opening_id) is None
+
+
+def test_delete_script_removes_personal_sections(
+    session: Session,
+) -> None:
+    repository = ScriptRepository(session)
+    opening = add_personal_section(session, SectionType.OPENING)
+    closing = add_personal_section(session, SectionType.CLOSING)
+    session.add(
+        SectionLine(
+            section_id=opening.id,
+            line_order=1,
+            talker="코스",
+            content="좋은 아침입니다.",
+        )
+    )
+    script = repository.create_generating_script(
+        USER_ID_1,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+    repository.add_sections(script, [opening, closing])
+    script_id = script.id
+    opening_id = opening.id
+    closing_id = closing.id
+
+    assert repository.delete_by_id(script_id) is True
+    assert session.get(Script, script_id) is None
+    assert session.get(Section, opening_id) is None
+    assert session.get(Section, closing_id) is None
+
+
+def test_delete_missing_script_returns_false(
+    session: Session,
+) -> None:
+    assert ScriptRepository(session).delete_by_id(UUID(int=99)) is False

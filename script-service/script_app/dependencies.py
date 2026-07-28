@@ -17,6 +17,7 @@ from script_app.services import (
     CommonSectionService,
     NewsSelector,
     PersonalSectionService,
+    ScriptDeletionService,
     ScriptGenerationService,
 )
 
@@ -61,4 +62,14 @@ def create_script_generation_service(
             target_repository=target_repository,
             ai_client=ai_client,
         ),
+    )
+
+
+def create_script_deletion_service(
+    session: Session,
+) -> ScriptDeletionService:
+    return ScriptDeletionService(
+        session=session,
+        script_repository=ScriptRepository(session),
+        section_repository=SectionRepository(session),
     )

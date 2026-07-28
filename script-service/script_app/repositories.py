@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -264,6 +264,30 @@ class SectionRepository:
 
         return lines_by_section
 
+    def delete_by_id(self, section_id: UUID) -> bool:
+        section = self.session.get(Section, section_id)
+
+        if section is None:
+            return False
+
+        is_referenced = self.session.scalar(
+            select(func.count())
+            .select_from(ScriptSection)
+            .where(ScriptSection.section_id == section_id)
+        )
+
+        if is_referenced:
+            raise SectionInUseError(section_id)
+
+        self.session.execute(
+            delete(SectionLine).where(
+                SectionLine.section_id == section_id
+            )
+        )
+        self.session.delete(section)
+        self.session.flush()
+        return True
+
     def _find_matching_common_section(
         self,
         section: Section,
@@ -464,6 +488,60 @@ class ScriptRepository:
         return "\n".join(
             f"{talker}: {content}"
             for talker, content in self.session.execute(stmt)
+        )
+
+    def delete_by_id(self, script_id: UUID) -> bool:
+        script = self.session.get(Script, script_id)
+
+        if script is None:
+            return False
+
+        script_sections = self.find_sections(script_id)
+        personal_section_ids = [
+            item.section_id
+            for item in script_sections
+            if item.section_type
+            in (
+                SectionType.OPENING,
+                SectionType.BRIDGE,
+                SectionType.CLOSING,
+            )
+        ]
+
+        for script_section in script_sections:
+            self.session.delete(script_section)
+
+        self.session.flush()
+        self.session.delete(script)
+
+        for section_id in personal_section_ids:
+            is_referenced = self.session.scalar(
+                select(func.count())
+                .select_from(ScriptSection)
+                .where(ScriptSection.section_id == section_id)
+            )
+
+            if is_referenced:
+                continue
+
+            self.session.execute(
+                delete(SectionLine).where(
+                    SectionLine.section_id == section_id
+                )
+            )
+            section = self.session.get(Section, section_id)
+
+            if section is not None:
+                self.session.delete(section)
+
+        self.session.flush()
+        return True
+
+
+class SectionInUseError(Exception):
+    def __init__(self, section_id: UUID) -> None:
+        super().__init__(
+            f"section {section_id} is referenced by a script"
         )
 
 

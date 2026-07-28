@@ -53,7 +53,8 @@ Content-Type: application/json
     {
       "script_id": "1ee14e43-fb5c-4225-8cb3-dc84a31e8423",
       "user_id": "3ad697a8-8d7d-4f80-a66f-04d994a89611",
-      "reused": false
+      "reused": false,
+      "script_text": "코스: 좋은 아침입니다.\n코미: 주요 소식을 전해드리겠습니다."
     }
   ],
   "failures": [
@@ -76,6 +77,7 @@ Content-Type: application/json
 | `scripts[].script_id` | UUID | `scripts.id` |
 | `scripts[].user_id` | UUID | 스크립트 소유 사용자 |
 | `scripts[].reused` | boolean | 동일 사용자·기간의 완료 문서를 재사용했는지 여부 |
+| `scripts[].script_text` | string | 섹션·발화 순서대로 조합한 `화자: 내용` 형식의 전체 대본 |
 | `failures` | 객체 배열 | 생성하지 못한 사용자별 실패 결과 |
 | `failures[].user_id` | UUID | 실패한 사용자 |
 | `failures[].code` | string enum | 서비스 오류 코드 |
@@ -88,6 +90,37 @@ HTTP 응답:
 | `200 OK` | 전체 성공, 일부 사용자 성공 또는 모든 사용자의 사용자 단위 실패 |
 | `422 Unprocessable Entity` | timezone 누락, 잘못된 기간, 빈 사용자 목록 등 요청 검증 실패 |
 | `500 Internal Server Error` | 요청 전체를 처리할 수 없는 예상하지 못한 서버 장애 |
+
+### 스크립트 삭제
+
+```http
+DELETE /scripts/{script_id}
+```
+
+스크립트와 연결 정보, 해당 스크립트 전용 오프닝·브리지·클로징
+섹션을 삭제합니다. 다른 사용자가 재사용할 수 있는 종목·업종 공통
+섹션은 삭제하지 않습니다.
+
+| 상태 | 조건 |
+|---|---|
+| `204 No Content` | 삭제 완료 |
+| `404 Not Found` | 해당 ID의 스크립트가 없음 |
+| `409 Conflict` | 오디오 등 다른 데이터가 스크립트를 참조하고 있음 |
+
+### 섹션 삭제
+
+```http
+DELETE /sections/{section_id}
+```
+
+어떤 스크립트에서도 사용하지 않는 섹션과 해당 발화를 삭제합니다.
+스크립트에서 사용 중인 섹션은 대본 정합성을 위해 삭제하지 않습니다.
+
+| 상태 | 조건 |
+|---|---|
+| `204 No Content` | 삭제 완료 |
+| `404 Not Found` | 해당 ID의 섹션이 없음 |
+| `409 Conflict` | 하나 이상의 스크립트에서 섹션을 사용 중 |
 
 ### 상태 확인
 

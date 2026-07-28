@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from script_app.dependencies import (
     create_script_generation_service,
+    create_script_deletion_service,
     get_session,
+)
+from script_app.services import (
+    ResourceInUseError,
+    ResourceNotFoundError,
 )
 from script_app.schemas import (
     GenerateUserScriptsRequest,
@@ -25,3 +32,29 @@ async def generate_scripts(
         period_start=request.start_at,
         period_end=request.end_at,
     )
+
+
+@router.delete(
+    "/{script_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_script(
+    script_id: UUID,
+    session: Session = Depends(get_session),
+) -> Response:
+    service = create_script_deletion_service(session)
+
+    try:
+        service.delete_script(script_id)
+    except ResourceNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="스크립트를 찾을 수 없습니다.",
+        ) from error
+    except ResourceInUseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="다른 데이터가 참조 중인 스크립트입니다.",
+        ) from error
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

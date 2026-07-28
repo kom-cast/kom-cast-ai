@@ -12,8 +12,16 @@ from script_app.models import (
     SectionTargetType,
     SectionType,
     Stock,
+    Script,
+    ScriptStatus,
 )
-from script_app.repositories import SectionLineData, SectionRepository
+from script_app.repositories import (
+    ScriptRepository,
+    SectionInUseError,
+    SectionLineData,
+    SectionRepository,
+)
+from uuid import UUID
 
 
 PERIOD_START = datetime(2026, 7, 22, tzinfo=timezone.utc)
@@ -224,3 +232,54 @@ def test_section_repository_handles_empty_inputs(
         period_end=PERIOD_END,
     ) == {}
     assert repository.find_lines_by_section_ids([]) == {}
+
+
+def test_delete_unreferenced_section_and_lines(
+    session: Session,
+) -> None:
+    add_master_data(session)
+    repository = SectionRepository(session)
+    section = repository.save_with_lines(
+        create_section(
+            section_type=SectionType.STOCK,
+            stock_code="005930",
+        ),
+        [
+            SectionLineData(
+                talker="코스",
+                content="삭제할 발화입니다.",
+            )
+        ],
+    )
+
+    assert repository.delete_by_id(section.id) is True
+    assert session.get(Section, section.id) is None
+    assert repository.find_lines_by_section_ids(
+        [section.id]
+    )[section.id] == []
+
+
+def test_delete_section_rejects_script_reference(
+    session: Session,
+) -> None:
+    section_repository = SectionRepository(session)
+    section = Section(
+        section_type=SectionType.OPENING,
+        target_type=SectionTargetType.USER,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+    section_repository.save_with_lines(section, [])
+    script_repository = ScriptRepository(session)
+    script = Script(
+        user_id=UUID(int=1),
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+        status=ScriptStatus.COMPLETED,
+    )
+    session.add(script)
+    session.flush()
+    script_repository.add_sections(script, [section])
+
+    with pytest.raises(SectionInUseError):
+        section_repository.delete_by_id(section.id)
