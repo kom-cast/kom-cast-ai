@@ -195,6 +195,50 @@ async def test_generates_and_saves_missing_common_sections() -> None:
 
 
 @pytest.mark.asyncio
+async def test_passes_only_three_selected_news_to_ai() -> None:
+    (
+        service,
+        news_repository,
+        target_repository,
+        section_repository,
+        ai_client,
+    ) = create_service()
+    section_repository.find_stock_sections.return_value = {}
+    section_repository.find_industry_sections.return_value = {}
+    news_repository.find_by_stock_codes.return_value = {
+        "005930": [
+            news(f"삼성전자 주요 뉴스 {index}")
+            for index in range(1, 101)
+        ]
+    }
+    news_repository.find_by_industry_codes.return_value = {}
+    target_repository.find_stocks.return_value = {
+        "005930": Mock(corp_name="삼성전자")
+    }
+    ai_client.generate_common_section = AsyncMock(
+        return_value=ai_response("선별된 뉴스입니다.")
+    )
+    (
+        section_repository
+        .save_common_section_with_lines_or_get
+        .side_effect
+    ) = lambda section, lines: section
+
+    await service.prepare_sections(
+        stock_codes=["005930"],
+        industry_codes=[],
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+
+    source = (
+        ai_client.generate_common_section.await_args.args[0]
+    )
+    assert source.count("\n뉴스 ") == 3
+    assert "뉴스 4" not in source
+
+
+@pytest.mark.asyncio
 async def test_reports_targets_without_news() -> None:
     (
         service,

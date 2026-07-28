@@ -35,7 +35,7 @@ class TestOpenAiClient:
         assert "약 1분" in common_prompt
         assert "300~350자" in common_prompt
         assert "공백 포함" in common_prompt
-        assert "최대 10건" in common_prompt
+        assert "최대 3건" in common_prompt
         assert "핵심 사건 2~3개만 선정" in common_prompt
         assert "선정하지 않은 뉴스는 생략" in common_prompt
         assert "전체 lines는 2~4개의 발화" in common_prompt
