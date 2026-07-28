@@ -24,7 +24,11 @@ def _cache_key(script: Script) -> str:
     """대사 내용 기반 해시. 같은 스크립트는 항상 같은 캐시를 맞고, 스크립트가
     바뀌면(예: 포트폴리오 변경) script_id가 같아도 자동으로 새로 합성된다."""
     payload = json.dumps(
-        [line.model_dump() for line in script.sections.lines],
+        [
+            line.model_dump()
+            for section in script.sections
+            for line in section.lines
+        ],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -47,12 +51,20 @@ async def create_briefing(script: Script) -> dict:
     if cached is not None:
         return cached
 
-    line_audios = await synthesize_lines(script.sections.lines)
+    lines = [line for section in script.sections for line in section.lines]
+    # 섹션마다 target이 다를 수 있으므로(예: STOCK 섹션 다음 INDUSTRY 섹션), 라인
+    # 순서에 맞춰 어느 섹션 소속인지 target을 함께 펼쳐 둔다.
+    line_targets = [
+        section.target.model_dump()
+        for section in script.sections
+        for _ in section.lines
+    ]
+
+    line_audios = await synthesize_lines(lines)
     # merge()/.export()는 동기 CPU/IO 작업(pydub)이라, 한 프로세스에서 다른 요청의
     # 이벤트루프를 막지 않도록 스레드풀에서 실행한다.
     audio_bytes, manifest = await asyncio.to_thread(_mix_and_export, line_audios)
 
-    target = script.sections.target.model_dump()
     response = {
         "durationSec": manifest.duration_sec,
         "segments": [
@@ -63,7 +75,7 @@ async def create_briefing(script: Script) -> dict:
                 "startSec": s.start_sec,
                 "words": s.words,
             }
-            for s in manifest.segments
+            for s, target in zip(manifest.segments, line_targets)
         ],
     }
     audio_url = await asyncio.to_thread(storage.save, cache_key, audio_bytes, response)

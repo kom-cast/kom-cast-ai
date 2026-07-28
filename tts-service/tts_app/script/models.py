@@ -35,4 +35,4 @@ class Section(BaseModel):
 
 class Script(BaseModel):
     script_id: str
-    sections: Section
+    sections: list[Section] = Field(min_length=1)
