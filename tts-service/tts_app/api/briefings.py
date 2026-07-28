@@ -52,11 +52,13 @@ async def create_briefing(script: Script) -> dict:
     # 이벤트루프를 막지 않도록 스레드풀에서 실행한다.
     audio_bytes, manifest = await asyncio.to_thread(_mix_and_export, line_audios)
 
+    target = script.sections.target.model_dump()
     response = {
         "durationSec": manifest.duration_sec,
         "segments": [
             {
                 "speaker": s.speaker,
+                "target": target,
                 "text": s.text,
                 "startSec": s.start_sec,
                 "words": s.words,

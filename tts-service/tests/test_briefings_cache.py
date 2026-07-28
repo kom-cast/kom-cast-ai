@@ -86,6 +86,36 @@ def test_different_script_bypasses_cache(tmp_path, monkeypatch):
     assert call_count == 2
 
 
+def test_response_repeats_target_on_every_segment(tmp_path, monkeypatch):
+    monkeypatch.setattr(briefings_module, "AUDIO_DIR", tmp_path)
+
+    async def fake_synthesize_lines(lines: list[DialogueLine]) -> list[LineAudio]:
+        return [_fake_line_audio(line.speaker, line.text) for line in lines]
+
+    monkeypatch.setattr(briefings_module, "synthesize_lines", fake_synthesize_lines)
+
+    client = TestClient(app)
+    response = client.post(
+        "/briefings",
+        json={
+            "script_id": "target-echo-test",
+            "sections": {
+                "target": {"type": "STOCK", "stock_code": "005930"},
+                "lines": [
+                    {"speaker": "코스", "text": "오늘 삼성전자 주가는..."},
+                    {"speaker": "코미", "text": "네, 외국인 매수세가 강했네요."},
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    segments = response.json()["segments"]
+    assert len(segments) == 2
+    for segment in segments:
+        assert segment["target"] == {"type": "STOCK", "stock_code": "005930"}
+
+
 def test_industry_target_accepted(tmp_path, monkeypatch):
     monkeypatch.setattr(briefings_module, "AUDIO_DIR", tmp_path)
 

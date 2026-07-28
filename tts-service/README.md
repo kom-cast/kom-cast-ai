@@ -48,7 +48,7 @@ sequenceDiagram
         API->>Cache: {cache_key}.mp3 저장
     end
 
-    API-->>Client: audioUrl, durationSec, segments(words)
+    API-->>Client: audioUrl, durationSec, segments(target, words)
 ```
 
 ## 요구 사항
@@ -132,7 +132,7 @@ pytest
 { "type": "USER" }
 ```
 
-동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `sections.lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL과 세그먼트별 타이밍 정보가 포함됩니다. `audioUrl`은 [오디오 저장소](#오디오-저장소) 백엔드에 따라 `/static/audio/{key}.mp3`(local) 또는 `{AUDIO_CDN_BASE_URL}/{key}.mp3`(ncp) 형태입니다.
+동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `sections.lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL과 세그먼트별 타이밍 정보가 포함됩니다. `audioUrl`은 [오디오 저장소](#오디오-저장소) 백엔드에 따라 `/static/audio/{key}.mp3`(local) 또는 `{AUDIO_CDN_BASE_URL}/{key}.mp3`(ncp) 형태입니다. 각 `segment`에는 요청의 `sections.target`이 그대로 echo됩니다(한 스크립트 안의 모든 세그먼트가 같은 target).
 
 응답 예시:
 
@@ -143,6 +143,7 @@ pytest
   "segments": [
     {
       "speaker": "코스",
+      "target": { "type": "STOCK", "stock_code": "005930" },
       "text": "오늘 삼성전자 주가는 2% 상승했습니다.",
       "startSec": 0.0,
       "words": [
@@ -153,6 +154,7 @@ pytest
     },
     {
       "speaker": "코미",
+      "target": { "type": "STOCK", "stock_code": "005930" },
       "text": "네, 외국인 매수세가 강했네요.",
       "startSec": 6.1,
       "words": [
