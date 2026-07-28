@@ -293,6 +293,10 @@ async def test_isolates_ai_failure_by_target() -> None:
         "005930": [news("성공할 뉴스")],
     }
     news_repository.find_by_industry_codes.return_value = {}
+    target_repository.find_stocks.return_value = {
+        "000660": Mock(corp_name="실패할"),
+        "005930": Mock(corp_name="성공할"),
+    }
     ai_client.generate_common_section = AsyncMock(
         side_effect=[
             OpenAIError("AI error"),
@@ -339,6 +343,9 @@ async def test_unexpected_common_generation_error_is_not_hidden() -> None:
         "005930": [news("삼성전자 뉴스")]
     }
     news_repository.find_by_industry_codes.return_value = {}
+    target_repository.find_stocks.return_value = {
+        "005930": Mock(corp_name="삼성전자")
+    }
     ai_client.generate_common_section = AsyncMock(
         side_effect=RuntimeError("programming error")
     )
