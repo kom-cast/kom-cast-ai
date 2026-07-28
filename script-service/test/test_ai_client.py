@@ -7,6 +7,8 @@ from script_app.ai_client import (
     AiResponseInvalidError,
     OpenAiClient,
     create_openai_client,
+    load_common_section_prompt,
+    load_personal_sections_prompt,
 )
 from script_app.config import ModelSettings, OpenAiSettings
 from script_app.schemas import (
@@ -25,6 +27,19 @@ class TestOpenAiClient:
             personal_model="personal-model",
             personal_reasoning_effort="none",
         )
+
+    def test_prompts_define_target_reading_times(self) -> None:
+        common_prompt = load_common_section_prompt()
+        personal_prompt = load_personal_sections_prompt()
+
+        assert "약 1분" in common_prompt
+        assert "300~350자" in common_prompt
+        assert "공백 포함" in common_prompt
+        assert "opening은 약 1분" in personal_prompt
+        assert "약 10초" in personal_prompt
+        assert "50~60자" in personal_prompt
+        assert "closing은 약 30초" in personal_prompt
+        assert "150~175자" in personal_prompt
 
     def test_create_client_applies_request_timeout(
         self,
