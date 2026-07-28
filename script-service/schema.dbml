@@ -1,0 +1,307 @@
+Enum section_type {
+  STOCK
+  INDUSTRY
+  OPENING
+  BRIDGE
+  CLOSING
+}
+
+Enum section_target_type {
+  STOCK
+  INDUSTRY
+  USER
+}
+
+Enum script_status {
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+Table industries {
+  industry_code text [pk]
+  industry_name text [not null, unique]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table stocks {
+  stock_code text [pk]
+  corp_code text [not null, unique]
+  corp_name text [not null]
+  industry_code text [ref: > industries.industry_code]
+  is_kospi200 boolean [not null]
+  dart_modify_date date
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table market_prices {
+  id uuid [pk]
+  stock_code text [not null, ref: > stocks.stock_code]
+  traded_at timestamptz [not null]
+  interval text [not null]
+  open_price numeric [not null]
+  high_price numeric [not null]
+  low_price numeric [not null]
+  close_price numeric [not null]
+  volume bigint [not null]
+  change_rate numeric [not null, note: '등락률(%)']
+  trading_value bigint [not null]
+  market_cap bigint [not null]
+  vwap numeric
+  provider text [not null]
+  raw_external_id text [not null]
+
+  indexes {
+    (stock_code, traded_at, interval, provider) [unique, name: 'uq_market_price_source']
+  }
+}
+
+Table industry_prices {
+  id uuid [pk]
+  industry_code text [not null, ref: > industries.industry_code]
+  traded_at timestamptz [not null]
+  index_value numeric [not null]
+  change_amount numeric [not null]
+  change_rate numeric [not null, note: '등락률(%)']
+  open_value numeric
+  high_value numeric
+  low_value numeric
+  volume bigint [not null]
+  trading_value bigint [not null]
+  market_cap bigint
+  market_cap_free_float bigint
+  shares_outstanding bigint
+  foreign_ownership_rate numeric [note: '외국인 지분율(%)']
+  short_sale_volume bigint
+  short_sale_value bigint
+  provider text [not null]
+  raw_external_id text [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (industry_code, traded_at, provider) [unique, name: 'uq_industry_price_source']
+  }
+}
+
+Table industry_investor_flows {
+  id uuid [pk]
+  industry_code text [not null, ref: > industries.industry_code]
+  traded_at timestamptz [not null]
+  investor_type text [not null]
+  net_buy_volume bigint [not null]
+  net_buy_value bigint [not null]
+  provider text [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table disclosures {
+  id uuid [pk]
+  rcept_no text [not null, unique]
+  corp_cls text
+  corp_code text
+  corp_name text
+  stock_code text [note: 'stocks.stock_code와 논리 연결, 실제 FK 없음']
+  report_name text
+  filer_name text
+  received_on date
+  remarks text
+  viewer_url text
+}
+
+Table financial_statements {
+  id uuid [pk]
+  rcept_no text [note: 'disclosures.rcept_no와 논리 연결, 실제 FK 없음']
+  corp_code text
+  stock_code text [note: 'stocks.stock_code와 논리 연결, 실제 FK 없음']
+  bsns_year text
+  reprt_code text
+  fs_div text
+  sj_div text
+  account_nm text
+  thstrm_amount numeric
+  frmtrm_amount numeric
+  bfefrmtrm_amount numeric
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table news_articles {
+  id uuid [pk]
+  source text [not null]
+  news_date date [not null]
+  news_code text
+  published_at timestamptz [not null]
+  title text [not null]
+  body text [not null]
+  summary text
+  press_code integer
+}
+
+Table news_stock {
+  news_id uuid [not null, ref: > news_articles.id, note: '복합 PK 구성 컬럼']
+  stock_code text [not null, ref: > stocks.stock_code, note: '복합 PK 구성 컬럼']
+  created_at timestamptz [not null]
+
+  indexes {
+    (news_id, stock_code) [pk]
+  }
+}
+
+Table news_industry {
+  news_id uuid [not null, ref: > news_articles.id, note: '복합 PK 구성 컬럼']
+  industry_code text [not null, ref: > industries.industry_code, note: '복합 PK 구성 컬럼']
+  created_at timestamptz [not null]
+
+  indexes {
+    (news_id, industry_code) [pk]
+  }
+}
+
+Table document_embeddings {
+  id uuid [pk]
+  document_type text [not null]
+  document_id uuid [not null, note: '원본 문서 ID와 논리 연결, 실제 FK 없음']
+  model text [not null]
+  dimensions integer [not null]
+  content_hash text [not null]
+  embedding vector
+  status text [not null]
+  error_message text
+  embedded_at timestamptz
+}
+
+Table users {
+  id uuid [pk]
+  nickname varchar(50) [not null]
+  plan varchar(20) [not null, default: 'FREE']
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table user_preferences {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  voice varchar(50) [not null, default: 'jieun']
+  briefing_duration integer [not null, default: 10]
+  free_text text
+  notify_briefing boolean [not null, default: true]
+  notify_price_alert boolean [not null, default: true]
+  notify_marketing boolean [not null, default: false]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table user_stocks {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  stock_code text [not null, ref: > stocks.stock_code]
+  interest_type varchar(30) [not null]
+
+  indexes {
+    (user_id, stock_code) [unique, name: 'uq_user_stock']
+  }
+}
+
+Table user_industries {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  industry_code text [not null, ref: > industries.industry_code]
+
+  indexes {
+    (user_id, industry_code) [unique, name: 'uq_user_industry']
+  }
+}
+
+Table sections {
+  id uuid [pk]
+  section_type section_type [not null]
+  target_type section_target_type [not null]
+  stock_code text [ref: > stocks.stock_code]
+  industry_code text [ref: > industries.industry_code]
+  period_start timestamptz [not null]
+  period_end timestamptz [not null]
+  created_at timestamptz [not null]
+
+  Note: '''
+  ck_section_target:
+  STOCK 섹션은 STOCK 대상과 stock_code만 사용합니다.
+  INDUSTRY 섹션은 INDUSTRY 대상과 industry_code만 사용합니다.
+  OPENING, BRIDGE, CLOSING 섹션은 USER 대상이며 대상 코드를 사용하지 않습니다.
+
+  실제 DB 부분 유니크 인덱스:
+  uq_sections_stock_reuse: (stock_code, period_start, period_end) WHERE section_type = 'STOCK'
+  uq_sections_industry_reuse: (industry_code, period_start, period_end) WHERE section_type = 'INDUSTRY'
+  '''
+}
+
+Table section_lines {
+  id uuid [pk]
+  section_id uuid [not null]
+  line_order integer [not null]
+  talker varchar(50) [not null]
+  content text [not null]
+
+  indexes {
+    (section_id, line_order) [unique, name: 'uq_section_line_order']
+  }
+}
+
+Table scripts {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  period_start timestamptz [not null]
+  period_end timestamptz [not null]
+  status script_status [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, period_start, period_end) [unique, name: 'uq_script_user_period']
+  }
+}
+
+Table script_sections {
+  id uuid [pk]
+  script_id uuid [not null]
+  section_id uuid [not null]
+  section_order integer [not null, note: '1 이상']
+  section_type section_type [not null]
+
+  indexes {
+    (script_id, section_order) [unique, name: 'uq_script_section_order']
+  }
+}
+
+Table audios {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  script_id uuid [ref: > scripts.id, note: 'AI 스크립트 참조']
+  audio_type varchar(30) [not null, default: 'DAILY_BRIEFING']
+  audio_url text [not null]
+  duration_seconds integer [not null]
+  created_at timestamptz [not null]
+}
+
+Table audio_segments {
+  id uuid [pk]
+  audio_id uuid [not null, ref: > audios.id]
+  segment_order integer [not null]
+  speaker varchar(50) [not null]
+  stock_code text [ref: > stocks.stock_code]
+  text text [not null]
+  start_sec numeric [not null]
+  words jsonb
+  created_at timestamptz [not null]
+}
+
+Ref logical_stock_disclosure: disclosures.stock_code > stocks.stock_code
+Ref logical_stock_financial_statement: financial_statements.stock_code > stocks.stock_code
+Ref logical_disclosure_financial_statement: financial_statements.rcept_no > disclosures.rcept_no
+Ref logical_news_embedding: document_embeddings.document_id > news_articles.id
+
+Ref: section_lines.section_id > sections.id
+Ref: script_sections.script_id > scripts.id
+Ref: script_sections.section_id > sections.id

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables (secrets)
+.env
+!.env.example
+
+# Generated TTS audio output
+/static/audio/*
+!/static/audio/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
