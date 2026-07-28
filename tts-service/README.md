@@ -30,7 +30,7 @@ sequenceDiagram
     participant Typecast as Typecast TTS API
     participant Mixer as audio/mixer.py
 
-    Client->>API: Script(briefing_id, lines[])
+    Client->>API: Script(script_id, target, lines[])
     API->>API: 대사 내용 sha256 해시 → cache_key
     API->>Cache: cache_key.mp3 / .json 존재 확인
 
@@ -108,13 +108,13 @@ pytest
 
 ### `POST /briefings`
 
-요청 바디(`Script`): 브리핑 ID, 브리핑 대상(`target`), 화자별 대사 리스트.
+요청 바디(`Script`): 스크립트 ID, 브리핑 대상(`target`), 화자별 대사 리스트.
 
-`target`은 `type`(`STOCK` / `INDUSTRY` / `OTHER`)에 따라 모양이 달라지는 판별 유니온(discriminated union)입니다. 종목 브리핑은 `stock_id`, 산업군 브리핑은 `industry_id`를 함께 보내고, 그 외(`OTHER`)는 별도 id 없이 `type`만 보냅니다.
+`target`은 `type`(`STOCK` / `INDUSTRY` / `USER`)에 따라 모양이 달라지는 판별 유니온(discriminated union)입니다. 종목 브리핑은 `stock_id`, 산업군 브리핑은 `industry_id`를 함께 보내고, 사용자 지정 브리핑(`USER`)은 별도 id 없이 `type`만 보냅니다.
 
 ```json
 {
-  "briefing_id": "example",
+  "script_id": "example",
   "target": { "type": "STOCK", "stock_id": 5930 },
   "lines": [
     { "speaker": "코스", "text": "오늘 삼성전자 주가는..." }

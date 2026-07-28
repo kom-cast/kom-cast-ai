@@ -18,17 +18,17 @@ class IndustryTarget(BaseModel):
     industry_id: int
 
 
-class OtherTarget(BaseModel):
-    type: Literal["OTHER"]
+class UserTarget(BaseModel):
+    type: Literal["USER"]
 
 
 BriefingTarget = Annotated[
-    Union[StockTarget, IndustryTarget, OtherTarget],
+    Union[StockTarget, IndustryTarget, UserTarget],
     Field(discriminator="type"),
 ]
 
 
 class Script(BaseModel):
-    briefing_id: str
+    script_id: str
     target: BriefingTarget
     lines: list[DialogueLine]

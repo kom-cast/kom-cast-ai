@@ -22,7 +22,7 @@ AUDIO_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "audio"
 
 def _cache_key(script: Script) -> str:
     """대사 내용 기반 해시. 같은 스크립트는 항상 같은 캐시를 맞고, 스크립트가
-    바뀌면(예: 포트폴리오 변경) briefing_id가 같아도 자동으로 새로 합성된다."""
+    바뀌면(예: 포트폴리오 변경) script_id가 같아도 자동으로 새로 합성된다."""
     payload = json.dumps(
         [line.model_dump() for line in script.lines],
         ensure_ascii=False,

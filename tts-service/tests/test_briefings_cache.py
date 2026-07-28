@@ -32,7 +32,7 @@ def test_repeated_script_uses_cache(tmp_path, monkeypatch):
 
     client = TestClient(app)
     payload = {
-        "briefing_id": "test",
+        "script_id": "test",
         "target": {"type": "STOCK", "stock_id": 5930},
         "lines": [{"speaker": "코스", "text": "안녕하세요"}],
     }
@@ -62,7 +62,7 @@ def test_different_script_bypasses_cache(tmp_path, monkeypatch):
     first = client.post(
         "/briefings",
         json={
-            "briefing_id": "same-id",
+            "script_id": "same-id",
             "target": {"type": "STOCK", "stock_id": 5930},
             "lines": [{"speaker": "코스", "text": "첫 번째 스크립트"}],
         },
@@ -70,7 +70,7 @@ def test_different_script_bypasses_cache(tmp_path, monkeypatch):
     second = client.post(
         "/briefings",
         json={
-            "briefing_id": "same-id",
+            "script_id": "same-id",
             "target": {"type": "STOCK", "stock_id": 5930},
             "lines": [{"speaker": "코스", "text": "다른 스크립트"}],
         },
@@ -92,7 +92,7 @@ def test_industry_target_accepted(tmp_path, monkeypatch):
     response = client.post(
         "/briefings",
         json={
-            "briefing_id": "industry-test",
+            "script_id": "industry-test",
             "target": {"type": "INDUSTRY", "industry_id": 7},
             "lines": [{"speaker": "코스", "text": "반도체 업종 브리핑입니다"}],
         },
@@ -101,7 +101,7 @@ def test_industry_target_accepted(tmp_path, monkeypatch):
     assert response.status_code == 200
 
 
-def test_other_target_needs_no_id(tmp_path, monkeypatch):
+def test_user_target_needs_no_id(tmp_path, monkeypatch):
     monkeypatch.setattr(briefings_module, "AUDIO_DIR", tmp_path)
 
     async def fake_synthesize_lines(lines: list[DialogueLine]) -> list[LineAudio]:
@@ -113,9 +113,9 @@ def test_other_target_needs_no_id(tmp_path, monkeypatch):
     response = client.post(
         "/briefings",
         json={
-            "briefing_id": "other-test",
-            "target": {"type": "OTHER"},
-            "lines": [{"speaker": "코스", "text": "기타 브리핑입니다"}],
+            "script_id": "user-test",
+            "target": {"type": "USER"},
+            "lines": [{"speaker": "코스", "text": "사용자 브리핑입니다"}],
         },
     )
 
@@ -129,7 +129,7 @@ def test_stock_target_requires_stock_id(tmp_path, monkeypatch):
     response = client.post(
         "/briefings",
         json={
-            "briefing_id": "invalid-stock-test",
+            "script_id": "invalid-stock-test",
             "target": {"type": "STOCK"},
             "lines": [{"speaker": "코스", "text": "종목 아이디 누락"}],
         },
