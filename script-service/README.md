@@ -166,6 +166,12 @@ SCRIPT_AI_MAX_CONCURRENCY=5
 
 `OPENAI_TIMEOUT_SECONDS`와 `SCRIPT_AI_MAX_CONCURRENCY`에는 0보다 큰 값을 입력해야 합니다.
 
+PostgreSQL DB 서버를 사용할 때는 Psycopg 3 드라이버 URL을 사용합니다.
+
+```env
+DATABASE_URL=postgresql+psycopg://user:password@host:5432/database
+```
+
 ## 개발 환경
 
 Windows PowerShell:
@@ -223,6 +229,19 @@ python -m pip install -r requirements.txt
 - 종목 일별 시세와 업종 일별 지수 시세
 
 `Base.metadata.create_all()`은 없는 테이블을 생성할 수 있지만 기존 테이블의 컬럼, 제약조건 또는 인덱스를 마이그레이션하지 않습니다. 운영 DB 변경은 별도 스키마 관리 절차로 수행해야 합니다.
+
+원본 DB에 스크립트 서비스의 체크 제약과 공통 섹션 재사용 인덱스를 추가할
+때는 [`migrations/001_add_script_service_constraints.sql`](./migrations/001_add_script_service_constraints.sql)을
+먼저 검토한 후 적용합니다.
+
+```powershell
+psql "$env:DATABASE_URL" `
+  -f .\migrations\001_add_script_service_constraints.sql
+```
+
+부분 유니크 인덱스 생성 시 기존 중복 데이터가 있으면 마이그레이션이 실패하며,
+기존 데이터는 자동 삭제하지 않습니다. 중복 행을 확인하고 정리한 뒤 다시
+실행해야 합니다.
 
 기존 `script_documents` 테이블을 사용 중인 PostgreSQL DB는 배포 전에 다음
 이름 변경을 적용해야 합니다.

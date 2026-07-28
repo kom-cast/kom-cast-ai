@@ -24,7 +24,9 @@ from script_app.models import (
     ScriptStatus,
     ScriptSection,
     Stock,
+    User,
     UserIndustry,
+    UserPreference,
     UserStock,
 )
 
@@ -66,6 +68,8 @@ def test_tables_are_created() -> None:
 
     assert "industries" in table_names
     assert "stocks" in table_names
+    assert "users" in table_names
+    assert "user_preferences" in table_names
     assert "user_stocks" in table_names
     assert "user_industries" in table_names
     assert "news_articles" in table_names
@@ -77,6 +81,49 @@ def test_tables_are_created() -> None:
     assert "section_lines" in table_names
     assert "scripts" in table_names
     assert "script_sections" in table_names
+
+
+def test_postgresql_enum_names_match_server_schema() -> None:
+    assert Section.__table__.c.section_type.type.native_enum is True
+    assert Section.__table__.c.section_type.type.name == "section_type"
+    assert (
+        Section.__table__.c.target_type.type.name
+        == "section_target_type"
+    )
+    assert Script.__table__.c.status.type.native_enum is True
+    assert Script.__table__.c.status.type.name == "script_status"
+
+
+def test_user_foreign_keys_match_server_schema() -> None:
+    assert {
+        foreign_key.target_fullname
+        for foreign_key in UserStock.__table__.c.user_id.foreign_keys
+    } == {"users.id"}
+    assert {
+        foreign_key.target_fullname
+        for foreign_key in UserIndustry.__table__.c.user_id.foreign_keys
+    } == {"users.id"}
+    assert {
+        foreign_key.target_fullname
+        for foreign_key in Script.__table__.c.user_id.foreign_keys
+    } == {"users.id"}
+
+
+def test_save_user_and_preferences(session) -> None:
+    user = User(nickname="테스트 사용자")
+    preference = UserPreference(user_id=user.id)
+    session.add(user)
+    session.flush()
+    preference.user_id = user.id
+    session.add(preference)
+    session.commit()
+
+    assert user.plan == "FREE"
+    assert preference.voice == "jieun"
+    assert preference.briefing_duration == 10
+    assert preference.notify_briefing is True
+    assert preference.notify_price_alert is True
+    assert preference.notify_marketing is False
 
 
 def add_stock_master_data(session) -> None:
