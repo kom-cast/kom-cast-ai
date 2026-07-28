@@ -261,6 +261,11 @@ async def test_full_generation_and_completed_document_reuse(
 
     assert first_response.failures == []
     assert first_response.scripts[0].reused is False
+    assert first_response.scripts[0].script_text
+    assert all(
+        line.startswith(("코스: ", "코미: "))
+        for line in first_response.scripts[0].script_text.splitlines()
+    )
     script = session.scalar(
         select(Script).where(
             Script.user_id == USER_ID
@@ -299,5 +304,9 @@ async def test_full_generation_and_completed_document_reuse(
     assert second_response.failures == []
     assert second_response.scripts[0].script_id == script.id
     assert second_response.scripts[0].reused is True
+    assert (
+        second_response.scripts[0].script_text
+        == first_response.scripts[0].script_text
+    )
     assert ai_client.generate_common_section.await_count == 2
     ai_client.generate_personal_sections.assert_awaited_once()

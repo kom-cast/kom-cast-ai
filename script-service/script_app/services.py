@@ -24,6 +24,7 @@ from script_app.repositories import (
     SectionLineData,
     SectionRepository,
     ScriptRepository,
+    SectionInUseError,
     TargetRepository,
     UserInterestRepository,
 )
@@ -73,6 +74,11 @@ class ScriptGenerationService:
                 script_id=script.id,
                 user_id=user_id,
                 reused=True,
+                script_text=(
+                    self.script_repository.get_script_text(
+                        script.id
+                    )
+                ),
             )
             for user_id in unique_user_ids
             if (
@@ -222,6 +228,12 @@ class ScriptGenerationService:
                             script_id=concurrent_script.id,
                             user_id=user_id,
                             reused=True,
+                            script_text=(
+                                self.script_repository
+                                .get_script_text(
+                                    concurrent_script.id
+                                )
+                            ),
                         )
                     )
                 elif (
@@ -284,6 +296,11 @@ class ScriptGenerationService:
                         script_id=script.id,
                         user_id=user_id,
                         reused=False,
+                        script_text=(
+                            self.script_repository.get_script_text(
+                                script.id
+                            )
+                        ),
                     )
                 )
             except (TimeoutError, APITimeoutError):
@@ -369,6 +386,69 @@ class ScriptGenerationService:
             code=code,
             message=message,
         )
+
+
+class ResourceNotFoundError(Exception):
+    pass
+
+
+class ResourceInUseError(Exception):
+    pass
+
+
+class ScriptDeletionService:
+    def __init__(
+        self,
+        session: Session,
+        script_repository: ScriptRepository,
+        section_repository: SectionRepository,
+    ) -> None:
+        self.session = session
+        self.script_repository = script_repository
+        self.section_repository = section_repository
+
+    def delete_script(self, script_id: UUID) -> None:
+        try:
+            deleted = self.script_repository.delete_by_id(
+                script_id
+            )
+
+            if not deleted:
+                raise ResourceNotFoundError
+
+            self.session.commit()
+        except ResourceNotFoundError:
+            self.session.rollback()
+            raise
+        except IntegrityError as error:
+            self.session.rollback()
+            raise ResourceInUseError from error
+        except SQLAlchemyError:
+            self.session.rollback()
+            raise
+
+    def delete_section(self, section_id: UUID) -> None:
+        try:
+            deleted = self.section_repository.delete_by_id(
+                section_id
+            )
+
+            if not deleted:
+                raise ResourceNotFoundError
+
+            self.session.commit()
+        except ResourceNotFoundError:
+            self.session.rollback()
+            raise
+        except SectionInUseError as error:
+            self.session.rollback()
+            raise ResourceInUseError from error
+        except IntegrityError as error:
+            self.session.rollback()
+            raise ResourceInUseError from error
+        except SQLAlchemyError:
+            self.session.rollback()
+            raise
 
 
 @dataclass
