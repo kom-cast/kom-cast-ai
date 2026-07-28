@@ -720,6 +720,12 @@ class NewsSelector:
         "오늘의 이슈&테마",
         "주요이슈 점검",
     )
+    LISTING_SUMMARY_KEYWORDS = (
+        "증권사 HTS",
+        "인포스탁 홈페이지",
+        "종목명 및 주가 변동",
+        "상위 종목 현황",
+    )
     MATERIAL_KEYWORDS = {
         "실적": 12,
         "영업이익": 12,
@@ -782,6 +788,9 @@ class NewsSelector:
     SUMMARY_TOKEN_PATTERN = re.compile(
         r"[0-9A-Za-z가-힣]{2,}"
     )
+    PERCENT_PATTERN = re.compile(
+        r"[+-]?\d+(?:\.\d+)?%"
+    )
     SUMMARY_STOP_WORDS = {
         "관련",
         "대한",
@@ -825,6 +834,7 @@ class NewsSelector:
         target_name: str,
         target_code: str,
         as_of: datetime,
+        require_direct_match: bool = True,
     ) -> list[NewsArticle]:
         ranked = sorted(
             (
@@ -836,6 +846,15 @@ class NewsSelector:
                 )
                 for article in articles
                 if not self._is_advertisement(article)
+                and not self._is_low_quality_listing(article)
+                and (
+                    not require_direct_match
+                    or self._has_direct_reference(
+                        article,
+                        target_name=target_name,
+                        target_code=target_code,
+                    )
+                )
             ),
             key=lambda item: (
                 -item.score,
@@ -983,6 +1002,37 @@ class NewsSelector:
         return any(
             keyword in text
             for keyword in self.ADVERTISEMENT_KEYWORDS
+        )
+
+    def _is_low_quality_listing(
+        self,
+        article: NewsArticle,
+    ) -> bool:
+        summary = article.summary or article.body
+
+        if len(self.PERCENT_PATTERN.findall(article.title)) >= 3:
+            return True
+
+        return any(
+            keyword in summary
+            for keyword in self.LISTING_SUMMARY_KEYWORDS
+        )
+
+    @staticmethod
+    def _has_direct_reference(
+        article: NewsArticle,
+        target_name: str,
+        target_code: str,
+    ) -> bool:
+        text = (
+            f"{article.title} "
+            f"{article.summary or article.body}"
+        )
+        return bool(
+            target_name
+            and target_name in text
+            or target_code
+            and target_code in text
         )
 
     def _normalize_title(self, title: str) -> str:
@@ -1282,6 +1332,9 @@ class CommonSectionService:
                 target_name=target_name,
                 target_code=code,
                 as_of=as_of,
+                require_direct_match=(
+                    section_type == SectionType.STOCK
+                ),
             )
 
             if news_articles:

@@ -214,6 +214,76 @@ def test_returns_available_news_without_padding() -> None:
     assert selected == [only_news]
 
 
+def test_excludes_mapped_news_without_direct_stock_reference() -> None:
+    selector = NewsSelector(max_articles=3)
+    unrelated = article(
+        1,
+        "LG이노텍 2분기 실적 개선",
+        "LG이노텍의 매출과 영업이익이 증가했습니다.",
+    )
+    direct = article(
+        2,
+        "OLED TV 시장 확대",
+        "LG전자 프리미엄 TV 판매에 영향을 줄 수 "
+        "있는 시장 소식입니다.",
+    )
+
+    selected = selector.select(
+        [unrelated, direct],
+        target_name="LG전자",
+        target_code="066570",
+        as_of=AS_OF,
+    )
+
+    assert selected == [direct]
+
+
+def test_excludes_multi_stock_price_listing() -> None:
+    selector = NewsSelector(max_articles=3)
+    listing = article(
+        1,
+        (
+            "SK하이닉스 -8.98%, DB하이텍 -7.80%, "
+            "삼성전자 -6.10%"
+        ),
+        "종목별 주가 변동과 HTS 정보를 제공합니다.",
+    )
+    substantive = article(
+        2,
+        "SK하이닉스 HBM 공급 확대",
+        "SK하이닉스가 고객 수요에 맞춰 HBM 생산과 "
+        "공급을 확대합니다.",
+    )
+
+    selected = selector.select(
+        [listing, substantive],
+        target_name="SK하이닉스",
+        target_code="000660",
+        as_of=AS_OF,
+    )
+
+    assert selected == [substantive]
+
+
+def test_industry_selection_does_not_require_name_mention() -> None:
+    selector = NewsSelector(max_articles=3)
+    mapped_industry_news = article(
+        1,
+        "HBM 장비 투자 확대",
+        "반도체 생산 장비 공급망의 투자가 늘었습니다.",
+    )
+
+    selected = selector.select(
+        [mapped_industry_news],
+        target_name="전기·전자",
+        target_code="13",
+        as_of=AS_OF,
+        require_direct_match=False,
+    )
+
+    assert selected == [mapped_industry_news]
+
+
 @pytest.mark.parametrize(
     "threshold",
     [0, -0.1, 1.1],
