@@ -174,9 +174,30 @@ Table document_embeddings {
   embedded_at timestamptz
 }
 
+Table users {
+  id uuid [pk]
+  nickname varchar(50) [not null]
+  plan varchar(20) [not null, default: 'FREE']
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table user_preferences {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  voice varchar(50) [not null, default: 'jieun']
+  briefing_duration integer [not null, default: 10]
+  free_text text
+  notify_briefing boolean [not null, default: true]
+  notify_price_alert boolean [not null, default: true]
+  notify_marketing boolean [not null, default: false]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
 Table user_stocks {
   id uuid [pk]
-  user_id uuid [not null]
+  user_id uuid [not null, ref: > users.id]
   stock_code text [not null, ref: > stocks.stock_code]
   interest_type varchar(30) [not null]
 
@@ -187,7 +208,7 @@ Table user_stocks {
 
 Table user_industries {
   id uuid [pk]
-  user_id uuid [not null]
+  user_id uuid [not null, ref: > users.id]
   industry_code text [not null, ref: > industries.industry_code]
 
   indexes {
@@ -231,7 +252,7 @@ Table section_lines {
 
 Table scripts {
   id uuid [pk]
-  user_id uuid [not null]
+  user_id uuid [not null, ref: > users.id]
   period_start timestamptz [not null]
   period_end timestamptz [not null]
   status script_status [not null]
@@ -254,11 +275,33 @@ Table script_sections {
   }
 }
 
+Table audios {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  script_id uuid [ref: > scripts.id, note: 'AI 스크립트 참조']
+  audio_type varchar(30) [not null, default: 'DAILY_BRIEFING']
+  audio_url text [not null]
+  duration_seconds integer [not null]
+  created_at timestamptz [not null]
+}
+
+Table audio_segments {
+  id uuid [pk]
+  audio_id uuid [not null, ref: > audios.id]
+  segment_order integer [not null]
+  speaker varchar(50) [not null]
+  stock_code text [ref: > stocks.stock_code]
+  text text [not null]
+  start_sec numeric [not null]
+  words jsonb
+  created_at timestamptz [not null]
+}
+
 Ref logical_stock_disclosure: disclosures.stock_code > stocks.stock_code
 Ref logical_stock_financial_statement: financial_statements.stock_code > stocks.stock_code
 Ref logical_disclosure_financial_statement: financial_statements.rcept_no > disclosures.rcept_no
 Ref logical_news_embedding: document_embeddings.document_id > news_articles.id
 
-Ref: section_lines.section_id > sections.id [delete: cascade]
-Ref: script_sections.script_id > scripts.id [delete: cascade]
+Ref: section_lines.section_id > sections.id
+Ref: script_sections.script_id > scripts.id
 Ref: script_sections.section_id > sections.id

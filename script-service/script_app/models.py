@@ -25,6 +25,104 @@ from sqlalchemy.orm import Mapped, mapped_column
 from script_app.database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    nickname: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    plan: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="FREE",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid4,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    voice: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="jieun",
+    )
+
+    briefing_duration: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+    )
+
+    free_text: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    notify_briefing: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    notify_price_alert: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    notify_marketing: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class Industry(Base):
     __tablename__ = "industries"
 
@@ -113,6 +211,7 @@ class UserStock(Base):
 
     user_id: Mapped[UUID] = mapped_column(
         Uuid,
+        ForeignKey("users.id"),
         nullable=False,
     )
 
@@ -147,6 +246,7 @@ class UserIndustry(Base):
 
     user_id: Mapped[UUID] = mapped_column(
         Uuid,
+        ForeignKey("users.id"),
         nullable=False,
     )
 
@@ -496,8 +596,8 @@ class Section(Base):
     section_type: Mapped[SectionType] = mapped_column(
         SqlEnum(
             SectionType,
-            native_enum=False,
-            length=30,
+            name="section_type",
+            native_enum=True,
             validate_strings=True,
         ),
         nullable=False,
@@ -506,8 +606,8 @@ class Section(Base):
     target_type: Mapped[SectionTargetType] = mapped_column(
         SqlEnum(
             SectionTargetType,
-            native_enum=False,
-            length=30,
+            name="section_target_type",
+            native_enum=True,
             validate_strings=True,
         ),
         nullable=False,
@@ -593,7 +693,7 @@ class SectionLine(Base):
 
     section_id: Mapped[UUID] = mapped_column(
         Uuid,
-        ForeignKey("sections.id", ondelete="CASCADE"),
+        ForeignKey("sections.id"),
         nullable=False,
     )
 
@@ -638,6 +738,7 @@ class Script(Base):
 
     user_id: Mapped[UUID] = mapped_column(
         Uuid,
+        ForeignKey("users.id"),
         nullable=False,
     )
 
@@ -654,8 +755,8 @@ class Script(Base):
     status: Mapped[ScriptStatus] = mapped_column(
         SqlEnum(
             ScriptStatus,
-            native_enum=False,
-            length=30,
+            name="script_status",
+            native_enum=True,
             validate_strings=True,
         ),
         nullable=False,
@@ -688,7 +789,7 @@ class ScriptSection(Base):
 
     script_id: Mapped[UUID] = mapped_column(
         Uuid,
-        ForeignKey("scripts.id", ondelete="CASCADE"),
+        ForeignKey("scripts.id"),
         nullable=False,
     )
 
@@ -706,8 +807,8 @@ class ScriptSection(Base):
     section_type: Mapped[SectionType] = mapped_column(
         SqlEnum(
             SectionType,
-            native_enum=False,
-            length=30,
+            name="section_type",
+            native_enum=True,
             validate_strings=True,
         ),
         nullable=False,
