@@ -779,14 +779,45 @@ class NewsSelector:
     )
     TITLE_SUFFIX_PATTERN = re.compile(r"\(종합\d*\)")
     NON_WORD_PATTERN = re.compile(r"[^0-9A-Za-z가-힣]")
+    SUMMARY_TOKEN_PATTERN = re.compile(
+        r"[0-9A-Za-z가-힣]{2,}"
+    )
+    SUMMARY_STOP_WORDS = {
+        "관련",
+        "대한",
+        "통해",
+        "위해",
+        "있는",
+        "있다",
+        "했다",
+        "한다",
+        "이번",
+        "최근",
+        "기자",
+        "뉴스",
+        "전망",
+    }
 
-    def __init__(self, max_articles: int = 3) -> None:
+    def __init__(
+        self,
+        max_articles: int = 3,
+        summary_overlap_threshold: float = 0.6,
+    ) -> None:
         if max_articles <= 0:
             raise ValueError(
                 "max_articles must be greater than 0"
             )
 
+        if not 0 < summary_overlap_threshold <= 1:
+            raise ValueError(
+                "summary_overlap_threshold must be "
+                "greater than 0 and at most 1"
+            )
+
         self.max_articles = max_articles
+        self.summary_overlap_threshold = (
+            summary_overlap_threshold
+        )
 
     def select(
         self,
@@ -902,11 +933,15 @@ class NewsSelector:
         result = []
         seen_news_codes = set()
         seen_titles = set()
+        selected_summary_tokens: list[set[str]] = []
 
         for item in ranked:
             news_code = item.article.news_code
             normalized_title = self._normalize_title(
                 item.article.title
+            )
+            summary_tokens = self._summary_tokens(
+                item.article.summary or item.article.body
             )
 
             if (
@@ -918,8 +953,19 @@ class NewsSelector:
             if normalized_title in seen_titles:
                 continue
 
+            if any(
+                self._summary_overlap(
+                    summary_tokens,
+                    existing_tokens,
+                )
+                >= self.summary_overlap_threshold
+                for existing_tokens in selected_summary_tokens
+            ):
+                continue
+
             result.append(item)
             seen_titles.add(normalized_title)
+            selected_summary_tokens.append(summary_tokens)
 
             if news_code:
                 seen_news_codes.add(news_code)
@@ -949,6 +995,25 @@ class NewsSelector:
             "",
             normalized,
         ).lower()
+
+    def _summary_tokens(self, summary: str) -> set[str]:
+        return {
+            token.lower()
+            for token in self.SUMMARY_TOKEN_PATTERN.findall(
+                summary
+            )
+            if token not in self.SUMMARY_STOP_WORDS
+        }
+
+    @staticmethod
+    def _summary_overlap(
+        first: set[str],
+        second: set[str],
+    ) -> float:
+        if not first or not second:
+            return 0
+
+        return len(first & second) / len(first | second)
 
     def _classify_topic(self, text: str) -> str:
         for topic, keywords in self.TOPIC_KEYWORDS:

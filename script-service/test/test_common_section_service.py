@@ -205,11 +205,19 @@ async def test_passes_only_three_selected_news_to_ai() -> None:
     ) = create_service()
     section_repository.find_stock_sections.return_value = {}
     section_repository.find_industry_sections.return_value = {}
+    articles = [
+        news(f"삼성전자 주요 뉴스 {index}")
+        for index in range(1, 101)
+    ]
+
+    for index, article in enumerate(articles, start=1):
+        article.summary = (
+            f"고유사건{index}의 독립변화{index}와 "
+            "시장 영향을 다룬 요약입니다."
+        )
+
     news_repository.find_by_stock_codes.return_value = {
-        "005930": [
-            news(f"삼성전자 주요 뉴스 {index}")
-            for index in range(1, 101)
-        ]
+        "005930": articles
     }
     news_repository.find_by_industry_codes.return_value = {}
     target_repository.find_stocks.return_value = {

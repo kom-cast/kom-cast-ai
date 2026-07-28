@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
+import pytest
+
 from script_app.models import NewsArticle
 from script_app.services import NewsSelector
 
@@ -31,12 +33,13 @@ def article(
 def test_selects_at_most_three_important_news() -> None:
     selector = NewsSelector(max_articles=3)
     articles = [
-        article(
-            index,
-            f"삼성전자 일반 뉴스 {index}",
-            "시장 동향을 전했습니다.",
-            hours_old=index,
-        )
+            article(
+                index,
+                f"삼성전자 일반 뉴스 {index}",
+                f"고유사건{index}의 독립변화{index}와 "
+                "시장 동향을 전했습니다.",
+                hours_old=index,
+            )
         for index in range(1, 101)
     ]
     important = article(
@@ -112,6 +115,40 @@ def test_excludes_advertisements_and_deduplicates_news() -> None:
     assert product in selected
 
 
+def test_deduplicates_different_titles_with_similar_summaries() -> None:
+    selector = NewsSelector(max_articles=3)
+    higher_score = article(
+        1,
+        "삼성전자 HBM 생산 확대와 실적 개선",
+        "삼성전자 HBM 생산 확대가 인공지능 메모리 "
+        "고객 수요 대응과 매출 개선으로 이어질 전망입니다.",
+    )
+    lower_score = article(
+        2,
+        "AI 메모리 공급 능력 확충",
+        "삼성전자 HBM 생산 확대가 인공지능 메모리 "
+        "고객 수요 대응과 매출 개선으로 이어질 계획입니다.",
+        hours_old=2,
+    )
+    unrelated = article(
+        3,
+        "삼성전자 모바일 신제품 출시",
+        "삼성전자가 새로운 폴더블 스마트폰을 "
+        "공개하고 판매를 시작했습니다.",
+    )
+
+    selected = selector.select(
+        [lower_score, unrelated, higher_score],
+        target_name="삼성전자",
+        target_code="005930",
+        as_of=AS_OF,
+    )
+
+    assert higher_score in selected
+    assert lower_score not in selected
+    assert unrelated in selected
+
+
 def test_prefers_different_topics_before_filling_same_topic() -> None:
     selector = NewsSelector(max_articles=3)
     earnings = article(
@@ -175,3 +212,19 @@ def test_returns_available_news_without_padding() -> None:
     )
 
     assert selected == [only_news]
+
+
+@pytest.mark.parametrize(
+    "threshold",
+    [0, -0.1, 1.1],
+)
+def test_rejects_invalid_summary_overlap_threshold(
+    threshold: float,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="summary_overlap_threshold",
+    ):
+        NewsSelector(
+            summary_overlap_threshold=threshold,
+        )
