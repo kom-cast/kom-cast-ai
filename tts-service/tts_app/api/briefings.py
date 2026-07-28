@@ -19,9 +19,9 @@ AUDIO_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "audio"
 
 def _cache_key(script: Script) -> str:
     """대사 내용 기반 해시. 같은 스크립트는 항상 같은 캐시를 맞고, 스크립트가
-    바뀌면(예: 포트폴리오 변경) briefing_id가 같아도 자동으로 새로 합성된다."""
+    바뀌면(예: 포트폴리오 변경) script_id가 같아도 자동으로 새로 합성된다."""
     payload = json.dumps(
-        [line.model_dump() for line in script.lines],
+        [line.model_dump() for line in script.sections.lines],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -43,7 +43,7 @@ async def create_briefing(script: Script) -> dict:
     if audio_path.exists() and manifest_path.exists():
         return json.loads(manifest_path.read_text())
 
-    line_audios = await synthesize_lines(script.lines)
+    line_audios = await synthesize_lines(script.sections.lines)
     # merge()/.export()는 동기 CPU/IO 작업(pydub)이라, 한 프로세스에서 다른 요청의
     # 이벤트루프를 막지 않도록 스레드풀에서 실행한다.
     manifest = await asyncio.to_thread(_mix_and_export, line_audios, audio_path)
@@ -54,7 +54,6 @@ async def create_briefing(script: Script) -> dict:
         "segments": [
             {
                 "speaker": s.speaker,
-                "stock": s.stock,
                 "text": s.text,
                 "startSec": s.start_sec,
                 "words": s.words,

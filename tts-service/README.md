@@ -11,7 +11,7 @@ tts-service/
 ├── tts_app/
 │   ├── api/         # 라우터 (POST /briefings)
 │   ├── audio/       # 합성된 라인들을 하나의 트랙으로 믹싱
-│   ├── script/      # 요청 스키마 (Script, DialogueLine)
+│   ├── script/      # 요청 스키마 (Script, Section, DialogueLine, BriefingTarget)
 │   ├── tts/          # Typecast API 연동 합성기
 │   ├── characters.py # 화자(코스/코미) → 보이스 ID 매핑
 │   ├── config.py     # 환경 변수 설정
@@ -30,7 +30,7 @@ sequenceDiagram
     participant Typecast as Typecast TTS API
     participant Mixer as audio/mixer.py
 
-    Client->>API: Script(briefing_id, lines[])
+    Client->>API: Script(script_id, sections{target, lines[]})
     API->>API: 대사 내용 sha256 해시 → cache_key
     API->>Cache: cache_key.mp3 / .json 존재 확인
 
@@ -85,18 +85,31 @@ pytest
 
 ### `POST /briefings`
 
-요청 바디(`Script`): 브리핑 ID와 화자별 대사 리스트.
+요청 바디(`Script`): 스크립트 ID와 `sections`(브리핑 대상 `target` + 화자별 대사 리스트 `lines`).
+
+`target`은 `type`(`STOCK` / `INDUSTRY` / `USER`)에 따라 모양이 달라지는 판별 유니온(discriminated union)입니다. 종목 브리핑은 `stock_code`, 산업군 브리핑은 `industry_code`를 함께 보내고, 사용자 지정 브리핑(`USER`)은 별도 id 없이 `type`만 보냅니다.
 
 ```json
 {
-  "briefing_id": "example",
-  "lines": [
-    { "speaker": "코스", "stock": "005930", "text": "오늘 삼성전자 주가는..." }
-  ]
+  "script_id": "example",
+  "sections": {
+    "target": { "type": "STOCK", "stock_code": "005930" },
+    "lines": [
+      { "speaker": "코스", "text": "오늘 삼성전자 주가는..." },
+      { "speaker": "코미", "text": "네, 외국인 매수세가 강했네요." }
+    ]
+  }
 }
 ```
 
-동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다. 응답에는 합성된 오디오 URL(`/static/audio/{key}.mp3`)과 세그먼트별 타이밍 정보가 포함됩니다.
+산업군/사용자 지정 브리핑은 `sections.target`만 다음과 같이 바뀝니다.
+
+```json
+{ "type": "INDUSTRY", "industry_code": "IT" }
+{ "type": "USER" }
+```
+
+동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `sections.lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL(`/static/audio/{key}.mp3`)과 세그먼트별 타이밍 정보가 포함됩니다.
 
 응답 예시:
 
@@ -107,7 +120,6 @@ pytest
   "segments": [
     {
       "speaker": "코스",
-      "stock": "005930",
       "text": "오늘 삼성전자 주가는 2% 상승했습니다.",
       "startSec": 0.0,
       "words": [
@@ -118,7 +130,6 @@ pytest
     },
     {
       "speaker": "코미",
-      "stock": "005930",
       "text": "네, 외국인 매수세가 강했네요.",
       "startSec": 6.1,
       "words": [

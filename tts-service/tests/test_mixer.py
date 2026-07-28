@@ -5,11 +5,11 @@ from pydub import AudioSegment
 from pydub.generators import Sine
 
 
-def _fake_line_audio(speaker: str, stock: str, text: str, seconds: float) -> LineAudio:
+def _fake_line_audio(speaker: str, text: str, seconds: float) -> LineAudio:
     tone = Sine(440).to_audio_segment(duration=int(seconds * 1000))
     buffer = tone.export(format="mp3")
     return LineAudio(
-        line=DialogueLine(speaker=speaker, stock=stock, text=text),
+        line=DialogueLine(speaker=speaker, text=text),
         audio=buffer.read(),
         audio_format="mp3",
         words=[WordTiming(text=text, start_sec=0.0, end_sec=seconds)],
@@ -17,8 +17,8 @@ def _fake_line_audio(speaker: str, stock: str, text: str, seconds: float) -> Lin
 
 
 def test_merge_offsets_are_cumulative():
-    first = _fake_line_audio("코스", "삼성전자", "코스 대사", seconds=1.0)
-    second = _fake_line_audio("코미", "삼성전자", "코미 대사", seconds=1.0)
+    first = _fake_line_audio("코스", "코스 대사", seconds=1.0)
+    second = _fake_line_audio("코미", "코미 대사", seconds=1.0)
 
     combined, manifest = merge([first, second])
 

@@ -38,8 +38,8 @@ async def test_synthesize_lines_calls_typecast_per_line():
     )
 
     lines = [
-        DialogueLine(speaker="코스", stock="삼성전자", text="코스 대사"),
-        DialogueLine(speaker="코미", stock="삼성전자", text="코미 대사"),
+        DialogueLine(speaker="코스", text="코스 대사"),
+        DialogueLine(speaker="코미", text="코미 대사"),
     ]
     results = await synthesize_lines(lines)
 
