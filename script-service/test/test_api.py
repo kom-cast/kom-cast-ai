@@ -28,7 +28,7 @@ def test_health() -> None:
     }
 
 
-def test_generate_scripts(monkeypatch) -> None:
+def test_generate_scripts(monkeypatch, caplog) -> None:
     fake_service = Mock()
     user_id_1 = UUID(
         "3ad697a8-8d7d-4f80-a66f-04d994a89611"
@@ -73,14 +73,18 @@ def test_generate_scripts(monkeypatch) -> None:
         fake_create_script_generation_service,
     )
 
-    response = client.post(
-        "/scripts/generate",
-        json={
-            "start_at": "2026-07-22T00:00:00+09:00",
-            "end_at": "2026-07-23T00:00:00+09:00",
-            "user_ids": [str(user_id_1), str(user_id_2)],
-        },
-    )
+    with caplog.at_level(
+        "INFO",
+        logger="script_app.api.scripts",
+    ):
+        response = client.post(
+            "/scripts/generate",
+            json={
+                "start_at": "2026-07-22T00:00:00+09:00",
+                "end_at": "2026-07-23T00:00:00+09:00",
+                "user_ids": [str(user_id_1), str(user_id_2)],
+            },
+        )
 
     assert response.status_code == 200
 
@@ -108,6 +112,9 @@ def test_generate_scripts(monkeypatch) -> None:
     }
 
     fake_service.generate.assert_awaited_once()
+    assert "script_generation_request_received" in caplog.text
+    assert str(user_id_1) in caplog.text
+    assert str(user_id_2) in caplog.text
 
 
 def test_generate_scripts_rejects_timestamp_without_timezone() -> None:

@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -18,6 +19,7 @@ from script_app.schemas import (
 )
 
 router = APIRouter(prefix="/scripts", tags=["scripts"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/generate", response_model=GenerateUserScriptsResponse)
@@ -25,6 +27,12 @@ async def generate_scripts(
     request: GenerateUserScriptsRequest,
     session: Session = Depends(get_session),
 ) -> GenerateUserScriptsResponse:
+    logger.info(
+        "script_generation_request_received start_at=%s end_at=%s user_ids=%s",
+        request.start_at.isoformat(),
+        request.end_at.isoformat(),
+        [str(user_id) for user_id in request.user_ids],
+    )
     service = create_script_generation_service(session)
 
     return await service.generate(
