@@ -57,7 +57,11 @@ class TestOpenAiClient:
             personal_prompt
         )
         assert "모든 브리핑은 아침" in personal_prompt
-        assert "오늘 시장에서 확인할 체크리스트" in (
+        assert "남아 있는 불확실성" in (
+            personal_prompt
+        )
+        assert "행동해야 하는 체크리스트" in personal_prompt
+        assert "행동 지침처럼 표현하지 마세요" in (
             personal_prompt
         )
         assert "코스피" not in personal_prompt
@@ -67,7 +71,6 @@ class TestOpenAiClient:
         assert "50~60자" in personal_prompt
         assert "closing은 약 30초" in personal_prompt
         assert "150~175자" in personal_prompt
-        assert "체크리스트 2~3개" in personal_prompt
         assert "기호 % 대신 퍼센트" in personal_prompt
 
     def test_create_client_applies_request_timeout(
