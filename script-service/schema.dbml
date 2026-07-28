@@ -12,7 +12,7 @@ Enum section_target_type {
   USER
 }
 
-Enum script_document_status {
+Enum script_status {
   GENERATING
   COMPLETED
   FAILED
@@ -29,7 +29,7 @@ Table stocks {
   stock_code text [pk]
   corp_code text [not null, unique]
   corp_name text [not null]
-  industry_code text
+  industry_code text [ref: > industries.industry_code]
   is_kospi200 boolean [not null]
   dart_modify_date date
   created_at timestamptz [not null]
@@ -38,7 +38,7 @@ Table stocks {
 
 Table market_prices {
   id uuid [pk]
-  stock_code text [not null]
+  stock_code text [not null, ref: > stocks.stock_code]
   traded_at timestamptz [not null]
   interval text [not null]
   open_price numeric [not null]
@@ -60,7 +60,7 @@ Table market_prices {
 
 Table industry_prices {
   id uuid [pk]
-  industry_code text [not null]
+  industry_code text [not null, ref: > industries.industry_code]
   traded_at timestamptz [not null]
   index_value numeric [not null]
   change_amount numeric [not null]
@@ -88,7 +88,7 @@ Table industry_prices {
 
 Table industry_investor_flows {
   id uuid [pk]
-  industry_code text [not null]
+  industry_code text [not null, ref: > industries.industry_code]
   traded_at timestamptz [not null]
   investor_type text [not null]
   net_buy_volume bigint [not null]
@@ -142,8 +142,8 @@ Table news_articles {
 }
 
 Table news_stock {
-  news_id uuid [not null]
-  stock_code text [not null]
+  news_id uuid [not null, ref: > news_articles.id, note: '복합 PK 구성 컬럼']
+  stock_code text [not null, ref: > stocks.stock_code, note: '복합 PK 구성 컬럼']
   created_at timestamptz [not null]
 
   indexes {
@@ -152,8 +152,8 @@ Table news_stock {
 }
 
 Table news_industry {
-  news_id uuid [not null]
-  industry_code text [not null]
+  news_id uuid [not null, ref: > news_articles.id, note: '복합 PK 구성 컬럼']
+  industry_code text [not null, ref: > industries.industry_code, note: '복합 PK 구성 컬럼']
   created_at timestamptz [not null]
 
   indexes {
@@ -177,7 +177,7 @@ Table document_embeddings {
 Table user_stocks {
   id uuid [pk]
   user_id uuid [not null]
-  stock_code text [not null]
+  stock_code text [not null, ref: > stocks.stock_code]
   interest_type varchar(30) [not null]
 
   indexes {
@@ -188,7 +188,7 @@ Table user_stocks {
 Table user_industries {
   id uuid [pk]
   user_id uuid [not null]
-  industry_code text [not null]
+  industry_code text [not null, ref: > industries.industry_code]
 
   indexes {
     (user_id, industry_code) [unique, name: 'uq_user_industry']
@@ -199,8 +199,8 @@ Table sections {
   id uuid [pk]
   section_type section_type [not null]
   target_type section_target_type [not null]
-  stock_code text
-  industry_code text
+  stock_code text [ref: > stocks.stock_code]
+  industry_code text [ref: > industries.industry_code]
   period_start timestamptz [not null]
   period_end timestamptz [not null]
   created_at timestamptz [not null]
@@ -234,7 +234,7 @@ Table scripts {
   user_id uuid [not null]
   period_start timestamptz [not null]
   period_end timestamptz [not null]
-  status script_document_status [not null]
+  status script_status [not null]
   created_at timestamptz [not null]
 
   indexes {
@@ -254,27 +254,11 @@ Table script_sections {
   }
 }
 
-Ref: stocks.industry_code > industries.industry_code
-Ref: market_prices.stock_code > stocks.stock_code
-Ref: industry_prices.industry_code > industries.industry_code
-Ref: industry_investor_flows.industry_code > industries.industry_code
-
-Ref: news_stock.news_id > news_articles.id
-Ref: news_stock.stock_code > stocks.stock_code
-Ref: news_industry.news_id > news_articles.id
-Ref: news_industry.industry_code > industries.industry_code
-
 Ref logical_stock_disclosure: disclosures.stock_code > stocks.stock_code
 Ref logical_stock_financial_statement: financial_statements.stock_code > stocks.stock_code
 Ref logical_disclosure_financial_statement: financial_statements.rcept_no > disclosures.rcept_no
 Ref logical_news_embedding: document_embeddings.document_id > news_articles.id
 
-Ref: user_stocks.stock_code > stocks.stock_code
-Ref: user_industries.industry_code > industries.industry_code
-
-Ref: sections.stock_code > stocks.stock_code
-Ref: sections.industry_code > industries.industry_code
 Ref: section_lines.section_id > sections.id [delete: cascade]
-
 Ref: script_sections.script_id > scripts.id [delete: cascade]
 Ref: script_sections.section_id > sections.id
