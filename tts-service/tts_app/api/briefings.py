@@ -2,59 +2,63 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 from pathlib import Path
 
 from fastapi import APIRouter
 
 from tts_app.audio.mixer import BriefingManifest, merge
+from tts_app.audio.storage import get_audio_storage
 from tts_app.script.models import Script
 from tts_app.tts.synthesizer import LineAudio, synthesize_lines
 
 router = APIRouter(prefix="/briefings", tags=["briefings"])
 
-# TODO: 배포 환경에서는 로컬 디스크 대신 S3/CDN 등 오브젝트 스토리지로 교체
+# 로컬 백엔드(AUDIO_BACKEND=local, 기본값)에서만 쓰인다. 배포 환경은 AUDIO_BACKEND=ncp로
+# 네이버클라우드 Object Storage에 저장한다. tts_app/audio/storage.py 참고.
 AUDIO_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "audio"
 
 
 def _cache_key(script: Script) -> str:
     """대사 내용 기반 해시. 같은 스크립트는 항상 같은 캐시를 맞고, 스크립트가
-    바뀌면(예: 포트폴리오 변경) briefing_id가 같아도 자동으로 새로 합성된다."""
+    바뀌면(예: 포트폴리오 변경) script_id가 같아도 자동으로 새로 합성된다."""
     payload = json.dumps(
-        [line.model_dump() for line in script.lines],
+        [line.model_dump() for line in script.sections.lines],
         ensure_ascii=False,
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def _mix_and_export(line_audios: list[LineAudio], audio_path: Path) -> BriefingManifest:
+def _mix_and_export(line_audios: list[LineAudio]) -> tuple[bytes, BriefingManifest]:
     combined, manifest = merge(line_audios)
-    combined.export(audio_path, format="mp3")
-    return manifest
+    buffer = io.BytesIO()
+    combined.export(buffer, format="mp3")
+    return buffer.getvalue(), manifest
 
 
 @router.post("")
 async def create_briefing(script: Script) -> dict:
+    storage = get_audio_storage(AUDIO_DIR)
     cache_key = _cache_key(script)
-    audio_path = AUDIO_DIR / f"{cache_key}.mp3"
-    manifest_path = AUDIO_DIR / f"{cache_key}.json"
 
-    if audio_path.exists() and manifest_path.exists():
-        return json.loads(manifest_path.read_text())
+    cached = storage.read_manifest(cache_key)
+    if cached is not None:
+        return cached
 
-    line_audios = await synthesize_lines(script.lines)
+    line_audios = await synthesize_lines(script.sections.lines)
     # merge()/.export()는 동기 CPU/IO 작업(pydub)이라, 한 프로세스에서 다른 요청의
     # 이벤트루프를 막지 않도록 스레드풀에서 실행한다.
-    manifest = await asyncio.to_thread(_mix_and_export, line_audios, audio_path)
+    audio_bytes, manifest = await asyncio.to_thread(_mix_and_export, line_audios)
 
+    target = script.sections.target.model_dump()
     response = {
-        "audioUrl": f"/static/audio/{cache_key}.mp3",
         "durationSec": manifest.duration_sec,
         "segments": [
             {
                 "speaker": s.speaker,
-                "stock": s.stock,
+                "target": target,
                 "text": s.text,
                 "startSec": s.start_sec,
                 "words": s.words,
@@ -62,5 +66,6 @@ async def create_briefing(script: Script) -> dict:
             for s in manifest.segments
         ],
     }
-    manifest_path.write_text(json.dumps(response, ensure_ascii=False))
+    audio_url = await asyncio.to_thread(storage.save, cache_key, audio_bytes, response)
+    response["audioUrl"] = audio_url
     return response
