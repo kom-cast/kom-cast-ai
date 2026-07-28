@@ -1,5 +1,8 @@
+import argparse
 import asyncio
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 
 from script_app.ai_client import AiClient, create_openai_client
 from script_app.schemas import AiScriptLine
@@ -20,15 +23,9 @@ class SampleTarget:
 SAMPLE_TARGETS = (
     SampleTarget(
         target_type="INDUSTRY",
-        code="SEMI",
-        name="반도체",
-        news=(
-            (
-                "반도체 업계, 설비 투자 확대",
-                "주요 반도체 기업들이 생산 설비 투자를 "
-                "확대하고 있다.",
-            ),
-        ),
+        code="13",
+        name="전기·전자",
+        news=(),
         traded_at="2026-07-22T15:00:00+00:00",
         price_label="지수값",
         price_value="12345.67",
@@ -38,13 +35,7 @@ SAMPLE_TARGETS = (
         target_type="STOCK",
         code="000660",
         name="SK하이닉스",
-        news=(
-            (
-                "SK하이닉스, 고대역폭 메모리 생산 확대",
-                "SK하이닉스가 고대역폭 메모리 수요에 "
-                "대응해 생산 확대 계획을 발표했다.",
-            ),
-        ),
+        news=(),
         traded_at="2026-07-22T15:00:00+00:00",
         price_label="종가",
         price_value="210000원",
@@ -52,26 +43,101 @@ SAMPLE_TARGETS = (
     ),
     SampleTarget(
         target_type="STOCK",
+        code="066570",
+        name="LG전자",
+        news=(),
+        traded_at="2026-07-22T15:00:00+00:00",
+        price_label="종가",
+        price_value="98700원",
+        change="1.20% 상승",
+    ),
+    SampleTarget(
+        target_type="STOCK",
         code="005930",
         name="삼성전자",
-        news=(
-            (
-                "삼성전자, 반도체 설비 투자 확대",
-                "삼성전자가 차세대 반도체 생산을 위한 "
-                "설비 투자를 늘리기로 했다.",
-            ),
-            (
-                "메모리 반도체 수요 증가 전망",
-                "시장조사업체는 메모리 수요가 증가할 "
-                "가능성이 있다고 전망했다.",
-            ),
-        ),
+        news=(),
         traded_at="2026-07-22T15:00:00+00:00",
         price_label="종가",
         price_value="270000원",
         change="3.65% 상승",
     ),
 )
+
+DEFAULT_NEWS_FILE = (
+    Path(__file__).parent
+    / "sample_data"
+    / "openai_connection_news.csv"
+)
+
+
+def load_sample_targets(
+    news_file: Path,
+    max_news_per_target: int | None = None,
+) -> tuple[SampleTarget, ...]:
+    if (
+        max_news_per_target is not None
+        and max_news_per_target < 1
+    ):
+        raise ValueError("max_news_per_target must be positive")
+
+    news_by_target: dict[str, list[tuple[str, str]]] = {
+        target.name: [] for target in SAMPLE_TARGETS
+    }
+
+    with news_file.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as file:
+        rows = csv.reader(file)
+
+        for row_number, row in enumerate(rows, start=1):
+            if len(row) != 3:
+                raise ValueError(
+                    f"뉴스 파일 {row_number}행은 "
+                    "대상, 제목, 요약 3개 열이어야 합니다."
+                )
+
+            target_name, title, summary = (
+                value.strip() for value in row
+            )
+            target_news = news_by_target.get(target_name)
+
+            if (
+                target_news is not None
+                and (
+                    max_news_per_target is None
+                    or len(target_news)
+                    < max_news_per_target
+                )
+            ):
+                target_news.append((title, summary))
+
+    missing_targets = [
+        name
+        for name, news in news_by_target.items()
+        if not news
+    ]
+
+    if missing_targets:
+        raise ValueError(
+            "뉴스가 없는 관심 대상: "
+            + ", ".join(missing_targets)
+        )
+
+    return tuple(
+        SampleTarget(
+            target_type=target.target_type,
+            code=target.code,
+            name=target.name,
+            news=tuple(news_by_target[target.name]),
+            traded_at=target.traded_at,
+            price_label=target.price_label,
+            price_value=target.price_value,
+            change=target.change,
+        )
+        for target in SAMPLE_TARGETS
+    )
 
 
 def build_common_source(target: SampleTarget) -> str:
@@ -162,12 +228,13 @@ def build_personal_source(
 
 async def generate_sample_briefing(
     ai_client: AiClient,
+    targets: tuple[SampleTarget, ...] = SAMPLE_TARGETS,
 ) -> list[AiScriptLine]:
     common_responses = [
         await ai_client.generate_common_section(
             build_common_source(target)
         )
-        for target in SAMPLE_TARGETS
+        for target in targets
     ]
     common_lines = [
         response.lines
@@ -176,10 +243,10 @@ async def generate_sample_briefing(
     personal_response = (
         await ai_client.generate_personal_sections(
             build_personal_source(
-                SAMPLE_TARGETS,
+                targets,
                 common_lines,
             ),
-            content_section_count=len(SAMPLE_TARGETS),
+            content_section_count=len(targets),
         )
     )
     briefing_lines = list(personal_response.opening)
@@ -197,10 +264,40 @@ async def generate_sample_briefing(
 
 
 async def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--news-file",
+        type=Path,
+        default=DEFAULT_NEWS_FILE,
+        help="대상, 제목, 요약 순서의 헤더 없는 CSV 파일",
+    )
+    parser.add_argument(
+        "--max-news-per-target",
+        type=int,
+        help=(
+            "대상별 최대 뉴스 수. 생략하면 파일의 뉴스를 "
+            "모두 사용합니다."
+        ),
+    )
+    args = parser.parse_args()
+    targets = load_sample_targets(
+        args.news_file,
+        args.max_news_per_target,
+    )
     ai_client = create_openai_client(profile="check")
-    briefing_lines = await generate_sample_briefing(ai_client)
+    briefing_lines = await generate_sample_briefing(
+        ai_client,
+        targets,
+    )
 
     print("=== 맞춤형 브리핑 생성 결과 ===")
+    print(
+        "사용 뉴스: "
+        + ", ".join(
+            f"{target.name} {len(target.news)}건"
+            for target in targets
+        )
+    )
 
     for line in briefing_lines:
         print(f"{line.talker.value}: {line.content}")
