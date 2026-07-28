@@ -47,11 +47,9 @@ async def create_briefing(script: Script) -> dict:
     storage = get_audio_storage(AUDIO_DIR)
     cache_key = _cache_key(script)
 
-    # TODO: NCP 버킷 GetObject 권한(AccessDenied) 이슈로 캐시 조회를 임시로 끔. 권한 이슈
-    # 해결되면 아래 두 줄 복원할 것.
-    # cached = storage.read_manifest(cache_key)
-    # if cached is not None:
-    #     return cached
+    cached = storage.read_manifest(cache_key)
+    if cached is not None:
+        return cached
 
     lines = [line for section in script.sections for line in section.lines]
     # 섹션마다 target이 다를 수 있으므로(예: STOCK 섹션 다음 INDUSTRY 섹션), 라인
