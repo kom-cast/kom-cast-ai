@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -37,6 +38,8 @@ from script_app.schemas import (
     ScriptFailureResult,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ScriptGenerationService:
     def __init__(
@@ -62,6 +65,21 @@ class ScriptGenerationService:
         period_end: datetime,
     ) -> GenerateUserScriptsResponse:
         unique_user_ids = list(dict.fromkeys(user_ids))
+        targets_by_user = (
+            self.user_interest_repository.find_by_user_ids(
+                unique_user_ids
+            )
+        )
+        for user_id in unique_user_ids:
+            targets = targets_by_user[user_id]
+            logger.info(
+                "script_generation_user_interests user_id=%s "
+                "stock_codes=%s industry_codes=%s",
+                user_id,
+                targets.stock_codes,
+                targets.industry_codes,
+            )
+
         existing_scripts = (
             self.script_repository.find_scripts(
                 unique_user_ids,
@@ -114,23 +132,22 @@ class ScriptGenerationService:
                 failures=failures,
             )
 
-        targets_by_user = (
-            self.user_interest_repository.find_by_user_ids(
-                pending_user_ids
-            )
-        )
         all_stock_codes = sorted(
             {
                 stock_code
-                for targets in targets_by_user.values()
-                for stock_code in targets.stock_codes
+                for user_id in pending_user_ids
+                for stock_code in targets_by_user[
+                    user_id
+                ].stock_codes
             }
         )
         all_industry_codes = sorted(
             {
                 industry_code
-                for targets in targets_by_user.values()
-                for industry_code in targets.industry_codes
+                for user_id in pending_user_ids
+                for industry_code in targets_by_user[
+                    user_id
+                ].industry_codes
             }
         )
         common_result = (
@@ -1472,14 +1489,33 @@ class CommonSectionService:
     ) -> None:
         for code in codes:
             target_name = names_by_code.get(code, code)
+            raw_news_articles = news_by_code.get(code, [])
+            logger.info(
+                "common_section_news_before_selection "
+                "target_type=%s target_code=%s target_name=%s "
+                "news_count=%d",
+                section_type.value,
+                code,
+                target_name,
+                len(raw_news_articles),
+            )
             news_articles = self.news_selector.select(
-                news_by_code.get(code, []),
+                raw_news_articles,
                 target_name=target_name,
                 target_code=code,
                 as_of=as_of,
                 require_direct_match=(
                     section_type == SectionType.STOCK
                 ),
+            )
+            logger.info(
+                "common_section_news_after_selection "
+                "target_type=%s target_code=%s target_name=%s "
+                "news_count=%d",
+                section_type.value,
+                code,
+                target_name,
+                len(news_articles),
             )
 
             if news_articles:
