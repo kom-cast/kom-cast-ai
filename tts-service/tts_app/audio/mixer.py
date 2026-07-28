@@ -13,7 +13,6 @@ GAP_BETWEEN_LINES_MS = 400
 @dataclass
 class SegmentManifest:
     speaker: str
-    stock: str
     text: str
     start_sec: float
     words: list[dict]
@@ -38,7 +37,6 @@ def merge(line_audios: list[LineAudio]) -> tuple[AudioSegment, BriefingManifest]
         segments.append(
             SegmentManifest(
                 speaker=item.line.speaker,
-                stock=item.line.stock,
                 text=item.line.text,
                 start_sec=offset_sec,
                 words=[

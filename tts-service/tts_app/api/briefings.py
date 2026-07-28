@@ -54,7 +54,6 @@ async def create_briefing(script: Script) -> dict:
         "segments": [
             {
                 "speaker": s.speaker,
-                "stock": s.stock,
                 "text": s.text,
                 "startSec": s.start_sec,
                 "words": s.words,

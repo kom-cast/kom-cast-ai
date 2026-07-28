@@ -85,18 +85,29 @@ pytest
 
 ### `POST /briefings`
 
-요청 바디(`Script`): 브리핑 ID와 화자별 대사 리스트.
+요청 바디(`Script`): 브리핑 ID, 브리핑 대상(`target`), 화자별 대사 리스트.
+
+`target`은 `type`(`STOCK` / `INDUSTRY` / `OTHER`)에 따라 모양이 달라지는 판별 유니온(discriminated union)입니다. 종목 브리핑은 `stock_id`, 산업군 브리핑은 `industry_id`를 함께 보내고, 그 외(`OTHER`)는 별도 id 없이 `type`만 보냅니다.
 
 ```json
 {
   "briefing_id": "example",
+  "target": { "type": "STOCK", "stock_id": 5930 },
   "lines": [
-    { "speaker": "코스", "stock": "005930", "text": "오늘 삼성전자 주가는..." }
+    { "speaker": "코스", "text": "오늘 삼성전자 주가는..." }
   ]
 }
 ```
 
-동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다. 응답에는 합성된 오디오 URL(`/static/audio/{key}.mp3`)과 세그먼트별 타이밍 정보가 포함됩니다.
+산업군 브리핑 예시:
+
+```json
+{
+  "target": { "type": "INDUSTRY", "industry_id": 7 }
+}
+```
+
+동일한 대사 내용이면 해시 기반 캐시 키로 재합성 없이 기존 결과를 반환합니다(캐시 키는 `lines` 내용만 기준으로 계산되며 `target`은 포함되지 않습니다). 응답에는 합성된 오디오 URL(`/static/audio/{key}.mp3`)과 세그먼트별 타이밍 정보가 포함됩니다.
 
 응답 예시:
 
@@ -107,7 +118,6 @@ pytest
   "segments": [
     {
       "speaker": "코스",
-      "stock": "005930",
       "text": "오늘 삼성전자 주가는 2% 상승했습니다.",
       "startSec": 0.0,
       "words": [
@@ -118,7 +128,6 @@ pytest
     },
     {
       "speaker": "코미",
-      "stock": "005930",
       "text": "네, 외국인 매수세가 강했네요.",
       "startSec": 6.1,
       "words": [
