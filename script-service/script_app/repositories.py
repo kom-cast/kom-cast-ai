@@ -444,6 +444,28 @@ class ScriptRepository:
         )
         return list(self.session.scalars(stmt))
 
+    def get_script_text(self, script_id: UUID) -> str:
+        stmt = (
+            select(
+                SectionLine.talker,
+                SectionLine.content,
+            )
+            .join(
+                ScriptSection,
+                ScriptSection.section_id
+                == SectionLine.section_id,
+            )
+            .where(ScriptSection.script_id == script_id)
+            .order_by(
+                ScriptSection.section_order,
+                SectionLine.line_order,
+            )
+        )
+        return "\n".join(
+            f"{talker}: {content}"
+            for talker, content in self.session.execute(stmt)
+        )
+
 
 class NewsRepository:
 

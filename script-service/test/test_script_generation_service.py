@@ -72,6 +72,10 @@ def create_service():
     session = Mock(spec=Session)
     interest_repository = Mock(spec=UserInterestRepository)
     script_repository = Mock(spec=ScriptRepository)
+    script_repository.get_script_text.return_value = (
+        "코스: 좋은 아침입니다.\n"
+        "코미: 주요 소식을 전해드리겠습니다."
+    )
     common_service = Mock(spec=CommonSectionService)
     common_service.prepare_sections = AsyncMock()
     personal_service = Mock(spec=PersonalSectionService)
@@ -122,6 +126,10 @@ async def test_reuses_completed_documents() -> None:
 
     assert result.scripts[0].script_id == existing.id
     assert result.scripts[0].reused is True
+    assert result.scripts[0].script_text.startswith("코스: ")
+    script_repository.get_script_text.assert_called_once_with(
+        existing.id
+    )
     interest_repository.find_by_user_ids.assert_not_called()
     common_service.prepare_sections.assert_not_awaited()
     personal_service.generate_sections.assert_not_awaited()
@@ -191,6 +199,7 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         == ["SEMI"]
     )
     assert result.scripts[0].reused is False
+    assert result.scripts[0].script_text.startswith("코스: ")
     assert result.failures == []
     assert session.commit.call_count == 3
 

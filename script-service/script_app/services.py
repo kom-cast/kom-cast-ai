@@ -73,6 +73,11 @@ class ScriptGenerationService:
                 script_id=script.id,
                 user_id=user_id,
                 reused=True,
+                script_text=(
+                    self.script_repository.get_script_text(
+                        script.id
+                    )
+                ),
             )
             for user_id in unique_user_ids
             if (
@@ -222,6 +227,12 @@ class ScriptGenerationService:
                             script_id=concurrent_script.id,
                             user_id=user_id,
                             reused=True,
+                            script_text=(
+                                self.script_repository
+                                .get_script_text(
+                                    concurrent_script.id
+                                )
+                            ),
                         )
                     )
                 elif (
@@ -284,6 +295,11 @@ class ScriptGenerationService:
                         script_id=script.id,
                         user_id=user_id,
                         reused=False,
+                        script_text=(
+                            self.script_repository.get_script_text(
+                                script.id
+                            )
+                        ),
                     )
                 )
             except (TimeoutError, APITimeoutError):

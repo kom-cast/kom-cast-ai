@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from script_app.database import Base
 from script_app.models import (
     Section,
+    SectionLine,
     SectionTargetType,
     SectionType,
     Script,
@@ -145,6 +146,48 @@ def test_find_sections_returns_playback_order(
         opening.id,
         closing.id,
     ]
+
+
+def test_get_script_text_returns_lines_in_playback_order(
+    session: Session,
+) -> None:
+    repository = ScriptRepository(session)
+    opening = add_personal_section(session, SectionType.OPENING)
+    closing = add_personal_section(session, SectionType.CLOSING)
+    session.add_all(
+        [
+            SectionLine(
+                section_id=opening.id,
+                line_order=2,
+                talker="코미",
+                content="주요 소식을 전해드리겠습니다.",
+            ),
+            SectionLine(
+                section_id=opening.id,
+                line_order=1,
+                talker="코스",
+                content="좋은 아침입니다.",
+            ),
+            SectionLine(
+                section_id=closing.id,
+                line_order=1,
+                talker="코스",
+                content="편안한 아침 보내시기 바랍니다.",
+            ),
+        ]
+    )
+    script = repository.create_generating_script(
+        USER_ID_1,
+        period_start=PERIOD_START,
+        period_end=PERIOD_END,
+    )
+    repository.add_sections(script, [opening, closing])
+
+    assert repository.get_script_text(script.id) == (
+        "코스: 좋은 아침입니다.\n"
+        "코미: 주요 소식을 전해드리겠습니다.\n"
+        "코스: 편안한 아침 보내시기 바랍니다."
+    )
 
 
 def test_completed_document_lookup_handles_empty_input(

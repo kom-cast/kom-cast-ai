@@ -42,6 +42,10 @@ def test_generate_scripts(monkeypatch) -> None:
                     ),
                     user_id=user_id_1,
                     reused=False,
+                    script_text=(
+                        "코스: 좋은 아침입니다.\n"
+                        "코미: 주요 소식을 전해드리겠습니다."
+                    ),
                 )
             ],
             failures=[
@@ -84,6 +88,10 @@ def test_generate_scripts(monkeypatch) -> None:
                 ),
                 "user_id": str(user_id_1),
                 "reused": False,
+                "script_text": (
+                    "코스: 좋은 아침입니다.\n"
+                    "코미: 주요 소식을 전해드리겠습니다."
+                ),
             }
         ],
         "failures": [
