@@ -73,7 +73,7 @@ Content-Type: application/json
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `scripts` | 객체 배열 | 생성 또는 재사용에 성공한 사용자별 스크립트 |
-| `scripts[].script_id` | UUID | `script_documents.id` |
+| `scripts[].script_id` | UUID | `scripts.id` |
 | `scripts[].user_id` | UUID | 스크립트 소유 사용자 |
 | `scripts[].reused` | boolean | 동일 사용자·기간의 완료 문서를 재사용했는지 여부 |
 | `failures` | 객체 배열 | 생성하지 못한 사용자별 실패 결과 |
@@ -224,6 +224,22 @@ python -m pip install -r requirements.txt
 
 `Base.metadata.create_all()`은 없는 테이블을 생성할 수 있지만 기존 테이블의 컬럼, 제약조건 또는 인덱스를 마이그레이션하지 않습니다. 운영 DB 변경은 별도 스키마 관리 절차로 수행해야 합니다.
 
+기존 `script_documents` 테이블을 사용 중인 PostgreSQL DB는 배포 전에 다음
+이름 변경을 적용해야 합니다.
+
+```sql
+ALTER TABLE script_documents RENAME TO scripts;
+ALTER TABLE script_sections RENAME COLUMN document_id TO script_id;
+ALTER TABLE scripts
+    RENAME CONSTRAINT uq_script_document_user_period
+    TO uq_script_user_period;
+```
+
+테이블과 컬럼을 변경하면 기존 FK 연결은 유지됩니다. DB가 자동 생성한 PK·FK
+제약조건 이름까지 새 명칭으로 통일하려면 실제 제약조건 이름을 확인한 뒤 별도로
+변경합니다. 신규 DB는 SQLAlchemy 모델을 통해 처음부터 `scripts`와
+`script_sections.script_id`를 생성합니다.
+
 ### ERD
 
 dbdiagram.io에서 전체 ERD를 확인하려면 새 다이어그램의 DBML 편집기에
@@ -328,7 +344,7 @@ erDiagram
         text content
     }
 
-    SCRIPT_DOCUMENTS {
+    SCRIPTS {
         uuid id PK
         uuid user_id
         datetime period_start
@@ -339,7 +355,7 @@ erDiagram
 
     SCRIPT_SECTIONS {
         uuid id PK
-        uuid document_id FK
+        uuid script_id FK
         uuid section_id FK
         int section_order
         string section_type
@@ -357,7 +373,7 @@ erDiagram
     STOCKS o|--o{ SECTIONS : stock_target
     INDUSTRIES o|--o{ SECTIONS : industry_target
     SECTIONS ||--o{ SECTION_LINES : contains
-    SCRIPT_DOCUMENTS ||--o{ SCRIPT_SECTIONS : orders
+    SCRIPTS ||--o{ SCRIPT_SECTIONS : orders
     SECTIONS ||--o{ SCRIPT_SECTIONS : reused_by
 ```
 
@@ -376,7 +392,7 @@ erDiagram
 | `document_embeddings` | 뉴스 등 원본 문서의 임베딩과 처리 상태 |
 | `sections` | 공통 콘텐츠 또는 사용자별 오프닝·브리지·클로징 |
 | `section_lines` | 섹션에 포함된 코스·코미 발화와 발화 순서 |
-| `script_documents` | 사용자와 조회 기간별 생성 문서 및 생성 상태 |
+| `scripts` | 사용자와 조회 기간별 생성 스크립트 및 생성 상태 |
 | `script_sections` | 문서에 포함된 섹션과 최종 재생 순서 |
 
 `STOCK`, `INDUSTRY` 섹션은 대상과 기간이 같으면 여러 사용자 문서에서

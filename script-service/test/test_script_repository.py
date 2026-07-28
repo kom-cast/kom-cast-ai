@@ -11,10 +11,10 @@ from script_app.models import (
     Section,
     SectionTargetType,
     SectionType,
-    ScriptDocument,
-    ScriptDocumentStatus,
+    Script,
+    ScriptStatus,
 )
-from script_app.repositories import ScriptDocumentRepository
+from script_app.repositories import ScriptRepository
 
 
 USER_ID_1 = UUID("3ad697a8-8d7d-4f80-a66f-04d994a89611")
@@ -58,37 +58,37 @@ def add_personal_section(
     return section
 
 
-def add_document(
+def add_script(
     session: Session,
     *,
     user_id: UUID,
-    status: ScriptDocumentStatus,
-) -> ScriptDocument:
-    document = ScriptDocument(
+    status: ScriptStatus,
+) -> Script:
+    script = Script(
         user_id=user_id,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
         status=status,
     )
-    session.add(document)
+    session.add(script)
     session.commit()
-    return document
+    return script
 
 
-def test_find_completed_documents_for_users(session: Session) -> None:
-    completed = add_document(
+def test_find_completed_scripts_for_users(session: Session) -> None:
+    completed = add_script(
         session,
         user_id=USER_ID_1,
-        status=ScriptDocumentStatus.COMPLETED,
+        status=ScriptStatus.COMPLETED,
     )
-    add_document(
+    add_script(
         session,
         user_id=USER_ID_2,
-        status=ScriptDocumentStatus.FAILED,
+        status=ScriptStatus.FAILED,
     )
-    repository = ScriptDocumentRepository(session)
+    repository = ScriptRepository(session)
 
-    result = repository.find_completed_documents(
+    result = repository.find_completed_scripts(
         [USER_ID_1, USER_ID_2],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
@@ -100,25 +100,25 @@ def test_find_completed_documents_for_users(session: Session) -> None:
 def test_create_document_add_sections_and_complete(
     session: Session,
 ) -> None:
-    repository = ScriptDocumentRepository(session)
+    repository = ScriptRepository(session)
     opening = add_personal_section(session, SectionType.OPENING)
     closing = add_personal_section(session, SectionType.CLOSING)
 
-    document = repository.create_generating_document(
+    script = repository.create_generating_script(
         USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
     links = repository.add_sections(
-        document,
+        script,
         [opening, closing],
     )
     repository.update_status(
-        document,
-        ScriptDocumentStatus.COMPLETED,
+        script,
+        ScriptStatus.COMPLETED,
     )
 
-    assert document.status == ScriptDocumentStatus.COMPLETED
+    assert script.status == ScriptStatus.COMPLETED
     assert [link.section_order for link in links] == [1, 2]
     assert [link.section_type for link in links] == [
         SectionType.OPENING,
@@ -129,17 +129,17 @@ def test_create_document_add_sections_and_complete(
 def test_find_sections_returns_playback_order(
     session: Session,
 ) -> None:
-    repository = ScriptDocumentRepository(session)
+    repository = ScriptRepository(session)
     opening = add_personal_section(session, SectionType.OPENING)
     closing = add_personal_section(session, SectionType.CLOSING)
-    document = repository.create_generating_document(
+    script = repository.create_generating_script(
         USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
     )
-    repository.add_sections(document, [opening, closing])
+    repository.add_sections(script, [opening, closing])
 
-    result = repository.find_sections(document.id)
+    result = repository.find_sections(script.id)
 
     assert [item.section_id for item in result] == [
         opening.id,
@@ -150,9 +150,9 @@ def test_find_sections_returns_playback_order(
 def test_completed_document_lookup_handles_empty_input(
     session: Session,
 ) -> None:
-    repository = ScriptDocumentRepository(session)
+    repository = ScriptRepository(session)
 
-    result = repository.find_completed_documents(
+    result = repository.find_completed_scripts(
         [],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
@@ -161,22 +161,22 @@ def test_completed_document_lookup_handles_empty_input(
     assert result == {}
 
 
-def test_find_documents_returns_all_statuses(
+def test_find_scripts_returns_all_statuses(
     session: Session,
 ) -> None:
-    generating = add_document(
+    generating = add_script(
         session,
         user_id=USER_ID_1,
-        status=ScriptDocumentStatus.GENERATING,
+        status=ScriptStatus.GENERATING,
     )
-    failed = add_document(
+    failed = add_script(
         session,
         user_id=USER_ID_2,
-        status=ScriptDocumentStatus.FAILED,
+        status=ScriptStatus.FAILED,
     )
-    repository = ScriptDocumentRepository(session)
+    repository = ScriptRepository(session)
 
-    result = repository.find_documents(
+    result = repository.find_scripts(
         [USER_ID_1, USER_ID_2],
         period_start=PERIOD_START,
         period_end=PERIOD_END,
@@ -188,22 +188,22 @@ def test_find_documents_returns_all_statuses(
     }
 
 
-def test_retry_failed_document_clears_personal_sections(
+def test_retry_failed_script_clears_personal_sections(
     session: Session,
 ) -> None:
-    repository = ScriptDocumentRepository(session)
-    document = add_document(
+    repository = ScriptRepository(session)
+    script = add_script(
         session,
         user_id=USER_ID_1,
-        status=ScriptDocumentStatus.FAILED,
+        status=ScriptStatus.FAILED,
     )
     opening = add_personal_section(session, SectionType.OPENING)
-    repository.add_sections(document, [opening])
+    repository.add_sections(script, [opening])
     session.commit()
     opening_id = opening.id
 
-    result = repository.retry_failed_document(document)
+    result = repository.retry_failed_script(script)
 
-    assert result.status == ScriptDocumentStatus.GENERATING
-    assert repository.find_sections(document.id) == []
+    assert result.status == ScriptStatus.GENERATING
+    assert repository.find_sections(script.id) == []
     assert session.get(Section, opening_id) is None

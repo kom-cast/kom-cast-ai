@@ -8,7 +8,7 @@ from script_app.database import SessionFactory
 from script_app.repositories import (
     NewsRepository,
     PriceRepository,
-    ScriptDocumentRepository,
+    ScriptRepository,
     SectionRepository,
     TargetRepository,
     UserInterestRepository,
@@ -41,7 +41,7 @@ def create_script_generation_service(
     return ScriptGenerationService(
         session=session,
         user_interest_repository=UserInterestRepository(session),
-        script_document_repository=ScriptDocumentRepository(
+        script_repository=ScriptRepository(
             session
         ),
         common_section_service=CommonSectionService(

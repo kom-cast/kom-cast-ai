@@ -15,14 +15,14 @@ from script_app.models import (
     Section,
     SectionTargetType,
     SectionType,
-    ScriptDocumentStatus,
+    ScriptStatus,
 )
 from script_app.repositories import (
     NewsRepository,
     PriceRepository,
     SectionLineData,
     SectionRepository,
-    ScriptDocumentRepository,
+    ScriptRepository,
     TargetRepository,
     UserInterestRepository,
 )
@@ -41,14 +41,14 @@ class ScriptGenerationService:
         self,
         session: Session,
         user_interest_repository: UserInterestRepository,
-        script_document_repository: ScriptDocumentRepository,
+        script_repository: ScriptRepository,
         common_section_service: "CommonSectionService",
         personal_section_service: "PersonalSectionService",
     ) -> None:
         self.session = session
         self.user_interest_repository = user_interest_repository
-        self.script_document_repository = (
-            script_document_repository
+        self.script_repository = (
+            script_repository
         )
         self.common_section_service = common_section_service
         self.personal_section_service = personal_section_service
@@ -60,8 +60,8 @@ class ScriptGenerationService:
         period_end: datetime,
     ) -> GenerateUserScriptsResponse:
         unique_user_ids = list(dict.fromkeys(user_ids))
-        existing_documents = (
-            self.script_document_repository.find_documents(
+        existing_scripts = (
+            self.script_repository.find_scripts(
                 unique_user_ids,
                 period_start=period_start,
                 period_end=period_end,
@@ -69,15 +69,15 @@ class ScriptGenerationService:
         )
         scripts = [
             GeneratedScriptResult(
-                script_id=document.id,
+                script_id=script.id,
                 user_id=user_id,
                 reused=True,
             )
             for user_id in unique_user_ids
             if (
-                document := existing_documents.get(user_id)
+                script := existing_scripts.get(user_id)
             ) is not None
-            and document.status == ScriptDocumentStatus.COMPLETED
+            and script.status == ScriptStatus.COMPLETED
         ]
         failures = [
             self._failure(
@@ -87,17 +87,17 @@ class ScriptGenerationService:
             )
             for user_id in unique_user_ids
             if (
-                document := existing_documents.get(user_id)
+                script := existing_scripts.get(user_id)
             ) is not None
-            and document.status == ScriptDocumentStatus.GENERATING
+            and script.status == ScriptStatus.GENERATING
         ]
         pending_user_ids = [
             user_id
             for user_id in unique_user_ids
             if (
-                (document := existing_documents.get(user_id))
+                (script := existing_scripts.get(user_id))
                 is None
-                or document.status == ScriptDocumentStatus.FAILED
+                or script.status == ScriptStatus.FAILED
             )
         ]
 
@@ -183,18 +183,18 @@ class ScriptGenerationService:
                 )
                 continue
 
-            existing_document = existing_documents.get(user_id)
+            existing_script = existing_scripts.get(user_id)
 
             try:
-                if existing_document is not None:
-                    document = (
-                        self.script_document_repository
-                        .retry_failed_document(existing_document)
+                if existing_script is not None:
+                    script = (
+                        self.script_repository
+                        .retry_failed_script(existing_script)
                     )
                 else:
-                    document = (
-                        self.script_document_repository
-                        .create_generating_document(
+                    script = (
+                        self.script_repository
+                        .create_generating_script(
                             user_id,
                             period_start=period_start,
                             period_end=period_end,
@@ -203,8 +203,8 @@ class ScriptGenerationService:
                 self.session.commit()
             except IntegrityError:
                 self.session.rollback()
-                concurrent_document = (
-                    self.script_document_repository.find_document(
+                concurrent_script = (
+                    self.script_repository.find_script(
                         user_id,
                         period_start=period_start,
                         period_end=period_end,
@@ -212,21 +212,21 @@ class ScriptGenerationService:
                 )
 
                 if (
-                    concurrent_document is not None
-                    and concurrent_document.status
-                    == ScriptDocumentStatus.COMPLETED
+                    concurrent_script is not None
+                    and concurrent_script.status
+                    == ScriptStatus.COMPLETED
                 ):
                     scripts.append(
                         GeneratedScriptResult(
-                            script_id=concurrent_document.id,
+                            script_id=concurrent_script.id,
                             user_id=user_id,
                             reused=True,
                         )
                     )
                 elif (
-                    concurrent_document is not None
-                    and concurrent_document.status
-                    == ScriptDocumentStatus.GENERATING
+                    concurrent_script is not None
+                    and concurrent_script.status
+                    == ScriptStatus.GENERATING
                 ):
                     failures.append(
                         self._failure(
@@ -269,24 +269,24 @@ class ScriptGenerationService:
                 ordered_sections = personal_sections.assemble(
                     content_sections
                 )
-                self.script_document_repository.add_sections(
-                    document,
+                self.script_repository.add_sections(
+                    script,
                     ordered_sections,
                 )
-                self.script_document_repository.update_status(
-                    document,
-                    ScriptDocumentStatus.COMPLETED,
+                self.script_repository.update_status(
+                    script,
+                    ScriptStatus.COMPLETED,
                 )
                 self.session.commit()
                 scripts.append(
                     GeneratedScriptResult(
-                        script_id=document.id,
+                        script_id=script.id,
                         user_id=user_id,
                         reused=False,
                     )
                 )
             except (TimeoutError, APITimeoutError):
-                self._mark_document_failed(document)
+                self._mark_script_failed(script)
                 failures.append(
                     self._failure(
                         user_id,
@@ -295,7 +295,7 @@ class ScriptGenerationService:
                     )
                 )
             except AiResponseInvalidError:
-                self._mark_document_failed(document)
+                self._mark_script_failed(script)
                 failures.append(
                     self._failure(
                         user_id,
@@ -304,7 +304,7 @@ class ScriptGenerationService:
                     )
                 )
             except SQLAlchemyError:
-                self._mark_document_failed(document)
+                self._mark_script_failed(script)
                 failures.append(
                     self._failure(
                         user_id,
@@ -313,7 +313,7 @@ class ScriptGenerationService:
                     )
                 )
             except OpenAIError:
-                self._mark_document_failed(document)
+                self._mark_script_failed(script)
                 failures.append(
                     self._failure(
                         user_id,
@@ -330,16 +330,16 @@ class ScriptGenerationService:
             failures=failures,
         )
 
-    def _mark_document_failed(
+    def _mark_script_failed(
         self,
-        document,
+        script,
     ) -> None:
         self.session.rollback()
 
         try:
-            self.script_document_repository.update_status(
-                document,
-                ScriptDocumentStatus.FAILED,
+            self.script_repository.update_status(
+                script,
+                ScriptStatus.FAILED,
             )
             self.session.commit()
         except SQLAlchemyError:

@@ -10,11 +10,11 @@ from script_app.models import (
     Section,
     SectionTargetType,
     SectionType,
-    ScriptDocument,
-    ScriptDocumentStatus,
+    Script,
+    ScriptStatus,
 )
 from script_app.repositories import (
-    ScriptDocumentRepository,
+    ScriptRepository,
     UserInterestRepository,
     UserInterestTargets,
 )
@@ -71,7 +71,7 @@ def personal_result() -> PersonalSectionResult:
 def create_service():
     session = Mock(spec=Session)
     interest_repository = Mock(spec=UserInterestRepository)
-    document_repository = Mock(spec=ScriptDocumentRepository)
+    script_repository = Mock(spec=ScriptRepository)
     common_service = Mock(spec=CommonSectionService)
     common_service.prepare_sections = AsyncMock()
     personal_service = Mock(spec=PersonalSectionService)
@@ -79,7 +79,7 @@ def create_service():
     service = ScriptGenerationService(
         session=session,
         user_interest_repository=interest_repository,
-        script_document_repository=document_repository,
+        script_repository=script_repository,
         common_section_service=common_service,
         personal_section_service=personal_service,
     )
@@ -87,7 +87,7 @@ def create_service():
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     )
@@ -99,18 +99,18 @@ async def test_reuses_completed_documents() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    existing = ScriptDocument(
+    existing = Script(
         id=UUID(int=1),
         user_id=USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        status=ScriptDocumentStatus.COMPLETED,
+        status=ScriptStatus.COMPLETED,
     )
-    document_repository.find_documents.return_value = {
+    script_repository.find_scripts.return_value = {
         USER_ID_1: existing
     }
 
@@ -134,11 +134,11 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_documents.return_value = {}
+    script_repository.find_scripts.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"],
@@ -153,15 +153,15 @@ async def test_generates_document_with_industries_before_stocks() -> None:
             industry_sections={"SEMI": industry},
         )
     )
-    document = ScriptDocument(
+    script = Script(
         id=UUID(int=10),
         user_id=USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        status=ScriptDocumentStatus.GENERATING,
+        status=ScriptStatus.GENERATING,
     )
-    document_repository.create_generating_document.return_value = (
-        document
+    script_repository.create_generating_script.return_value = (
+        script
     )
     generated_personal = personal_result()
     personal_service.generate_sections.return_value = (
@@ -201,11 +201,11 @@ async def test_reports_no_interest_and_no_news_failures() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_documents.return_value = {}
+    script_repository.find_scripts.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(),
         USER_ID_2: UserInterestTargets(
@@ -239,11 +239,11 @@ async def test_ai_failure_for_one_user_does_not_rollback_other_user(
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_documents.return_value = {}
+    script_repository.find_scripts.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"]
@@ -262,24 +262,24 @@ async def test_ai_failure_for_one_user_does_not_rollback_other_user(
             }
         )
     )
-    documents = [
-        ScriptDocument(
+    scripts = [
+        Script(
             id=UUID(int=10),
             user_id=USER_ID_1,
             period_start=PERIOD_START,
             period_end=PERIOD_END,
-            status=ScriptDocumentStatus.GENERATING,
+            status=ScriptStatus.GENERATING,
         ),
-        ScriptDocument(
+        Script(
             id=UUID(int=11),
             user_id=USER_ID_2,
             period_start=PERIOD_START,
             period_end=PERIOD_END,
-            status=ScriptDocumentStatus.GENERATING,
+            status=ScriptStatus.GENERATING,
         ),
     ]
-    document_repository.create_generating_document.side_effect = (
-        documents
+    script_repository.create_generating_script.side_effect = (
+        scripts
     )
     personal_service.generate_sections.side_effect = [
         AiResponseInvalidError("invalid"),
@@ -311,11 +311,11 @@ async def test_common_target_ai_failure_fails_affected_user() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    document_repository.find_documents.return_value = {}
+    script_repository.find_scripts.return_value = {}
     interest_repository.find_by_user_ids.return_value = {
         USER_ID_1: UserInterestTargets(
             stock_codes=["005930"]
@@ -345,18 +345,18 @@ async def test_existing_generating_document_is_not_duplicated() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    generating = ScriptDocument(
+    generating = Script(
         id=UUID(int=10),
         user_id=USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        status=ScriptDocumentStatus.GENERATING,
+        status=ScriptStatus.GENERATING,
     )
-    document_repository.find_documents.return_value = {
+    script_repository.find_scripts.return_value = {
         USER_ID_1: generating
     }
 
@@ -381,18 +381,18 @@ async def test_failed_document_is_retried_with_same_document() -> None:
         service,
         session,
         interest_repository,
-        document_repository,
+        script_repository,
         common_service,
         personal_service,
     ) = create_service()
-    failed = ScriptDocument(
+    failed = Script(
         id=UUID(int=10),
         user_id=USER_ID_1,
         period_start=PERIOD_START,
         period_end=PERIOD_END,
-        status=ScriptDocumentStatus.FAILED,
+        status=ScriptStatus.FAILED,
     )
-    document_repository.find_documents.return_value = {
+    script_repository.find_scripts.return_value = {
         USER_ID_1: failed
     }
     interest_repository.find_by_user_ids.return_value = {
@@ -406,7 +406,7 @@ async def test_failed_document_is_retried_with_same_document() -> None:
             stock_sections={"005930": stock}
         )
     )
-    document_repository.retry_failed_document.return_value = failed
+    script_repository.retry_failed_script.return_value = failed
     personal_service.generate_sections.return_value = (
         PersonalSectionResult(
             opening=section(100, SectionType.OPENING),
@@ -421,12 +421,12 @@ async def test_failed_document_is_retried_with_same_document() -> None:
         period_end=PERIOD_END,
     )
 
-    document_repository.retry_failed_document.assert_called_once_with(
+    script_repository.retry_failed_script.assert_called_once_with(
         failed
     )
     (
-        document_repository
-        .create_generating_document
+        script_repository
+        .create_generating_script
         .assert_not_called()
     )
     assert result.scripts[0].script_id == failed.id

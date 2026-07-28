@@ -621,14 +621,14 @@ class SectionLine(Base):
     )
 
 
-class ScriptDocumentStatus(str, Enum):
+class ScriptStatus(str, Enum):
     GENERATING = "GENERATING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
 
-class ScriptDocument(Base):
-    __tablename__ = "script_documents"
+class Script(Base):
+    __tablename__ = "scripts"
 
     id: Mapped[UUID] = mapped_column(
         Uuid,
@@ -651,9 +651,9 @@ class ScriptDocument(Base):
         nullable=False,
     )
 
-    status: Mapped[ScriptDocumentStatus] = mapped_column(
+    status: Mapped[ScriptStatus] = mapped_column(
         SqlEnum(
-            ScriptDocumentStatus,
+            ScriptStatus,
             native_enum=False,
             length=30,
             validate_strings=True,
@@ -672,7 +672,7 @@ class ScriptDocument(Base):
             "user_id",
             "period_start",
             "period_end",
-            name="uq_script_document_user_period",
+            name="uq_script_user_period",
         ),
     )
 
@@ -686,9 +686,9 @@ class ScriptSection(Base):
         default=uuid4,
     )
 
-    document_id: Mapped[UUID] = mapped_column(
+    script_id: Mapped[UUID] = mapped_column(
         Uuid,
-        ForeignKey("script_documents.id", ondelete="CASCADE"),
+        ForeignKey("scripts.id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -719,7 +719,7 @@ class ScriptSection(Base):
             name="ck_script_section_order_positive",
         ),
         UniqueConstraint(
-            "document_id",
+            "script_id",
             "section_order",
             name="uq_script_section_order",
         ),

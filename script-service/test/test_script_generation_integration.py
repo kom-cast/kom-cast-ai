@@ -17,8 +17,8 @@ from script_app.models import (
     NewsArticle,
     NewsIndustryMapping,
     NewsStockMapping,
-    ScriptDocument,
-    ScriptDocumentStatus,
+    Script,
+    ScriptStatus,
     SectionType,
     Stock,
     UserIndustry,
@@ -27,7 +27,7 @@ from script_app.models import (
 from script_app.repositories import (
     NewsRepository,
     PriceRepository,
-    ScriptDocumentRepository,
+    ScriptRepository,
     SectionRepository,
     TargetRepository,
     UserInterestRepository,
@@ -227,7 +227,7 @@ def create_generation_service(
     service = ScriptGenerationService(
         session=session,
         user_interest_repository=UserInterestRepository(session),
-        script_document_repository=ScriptDocumentRepository(
+        script_repository=ScriptRepository(
             session
         ),
         common_section_service=CommonSectionService(
@@ -261,17 +261,17 @@ async def test_full_generation_and_completed_document_reuse(
 
     assert first_response.failures == []
     assert first_response.scripts[0].reused is False
-    document = session.scalar(
-        select(ScriptDocument).where(
-            ScriptDocument.user_id == USER_ID
+    script = session.scalar(
+        select(Script).where(
+            Script.user_id == USER_ID
         )
     )
-    assert document is not None
-    assert document.status == ScriptDocumentStatus.COMPLETED
-    document_sections = ScriptDocumentRepository(
+    assert script is not None
+    assert script.status == ScriptStatus.COMPLETED
+    script_sections = ScriptRepository(
         session
-    ).find_sections(document.id)
-    assert [item.section_type for item in document_sections] == [
+    ).find_sections(script.id)
+    assert [item.section_type for item in script_sections] == [
         SectionType.OPENING,
         SectionType.INDUSTRY,
         SectionType.BRIDGE,
@@ -297,7 +297,7 @@ async def test_full_generation_and_completed_document_reuse(
     )
 
     assert second_response.failures == []
-    assert second_response.scripts[0].script_id == document.id
+    assert second_response.scripts[0].script_id == script.id
     assert second_response.scripts[0].reused is True
     assert ai_client.generate_common_section.await_count == 2
     ai_client.generate_personal_sections.assert_awaited_once()

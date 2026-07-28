@@ -229,7 +229,7 @@ Table section_lines {
   }
 }
 
-Table script_documents {
+Table scripts {
   id uuid [pk]
   user_id uuid [not null]
   period_start timestamptz [not null]
@@ -238,19 +238,19 @@ Table script_documents {
   created_at timestamptz [not null]
 
   indexes {
-    (user_id, period_start, period_end) [unique, name: 'uq_script_document_user_period']
+    (user_id, period_start, period_end) [unique, name: 'uq_script_user_period']
   }
 }
 
 Table script_sections {
   id uuid [pk]
-  document_id uuid [not null]
+  script_id uuid [not null]
   section_id uuid [not null]
   section_order integer [not null, note: '1 이상']
   section_type section_type [not null]
 
   indexes {
-    (document_id, section_order) [unique, name: 'uq_script_section_order']
+    (script_id, section_order) [unique, name: 'uq_script_section_order']
   }
 }
 
@@ -276,5 +276,5 @@ Ref: sections.stock_code > stocks.stock_code
 Ref: sections.industry_code > industries.industry_code
 Ref: section_lines.section_id > sections.id [delete: cascade]
 
-Ref: script_sections.document_id > script_documents.id [delete: cascade]
+Ref: script_sections.script_id > scripts.id [delete: cascade]
 Ref: script_sections.section_id > sections.id

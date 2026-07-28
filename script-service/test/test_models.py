@@ -20,8 +20,8 @@ from script_app.models import (
     SectionLine,
     SectionTargetType,
     SectionType,
-    ScriptDocument,
-    ScriptDocumentStatus,
+    Script,
+    ScriptStatus,
     ScriptSection,
     Stock,
     UserIndustry,
@@ -75,7 +75,7 @@ def test_tables_are_created() -> None:
     assert "industry_prices" in table_names
     assert "sections" in table_names
     assert "section_lines" in table_names
-    assert "script_documents" in table_names
+    assert "scripts" in table_names
     assert "script_sections" in table_names
 
 
@@ -480,8 +480,8 @@ def test_section_target_columns_must_match_section_type(session) -> None:
     session.rollback()
 
 
-def create_script_document(session) -> ScriptDocument:
-    document = ScriptDocument(
+def create_script(session) -> Script:
+    script = Script(
         user_id=USER_ID,
         period_start=datetime(
             2026,
@@ -495,41 +495,41 @@ def create_script_document(session) -> ScriptDocument:
             23,
             tzinfo=timezone.utc,
         ),
-        status=ScriptDocumentStatus.GENERATING,
+        status=ScriptStatus.GENERATING,
     )
-    session.add(document)
+    session.add(script)
     session.commit()
-    return document
+    return script
 
 
 def test_save_script_document_and_ordered_sections(session) -> None:
-    document = create_script_document(session)
+    script = create_script(session)
     section = create_stock_section(session)
     script_section = ScriptSection(
-        document_id=document.id,
+        script_id=script.id,
         section_id=section.id,
         section_order=1,
         section_type=SectionType.STOCK,
     )
 
     session.add(script_section)
-    document.status = ScriptDocumentStatus.COMPLETED
+    script.status = ScriptStatus.COMPLETED
     session.commit()
 
-    assert document.id is not None
-    assert document.status == ScriptDocumentStatus.COMPLETED
+    assert script.id is not None
+    assert script.status == ScriptStatus.COMPLETED
     assert script_section.id is not None
     assert script_section.section_order == 1
 
 
 def test_duplicate_script_document_period_is_rejected(session) -> None:
-    first_document = create_script_document(session)
+    first_script = create_script(session)
     session.add(
-        ScriptDocument(
-            user_id=first_document.user_id,
-            period_start=first_document.period_start,
-            period_end=first_document.period_end,
-            status=ScriptDocumentStatus.GENERATING,
+        Script(
+            user_id=first_script.user_id,
+            period_start=first_script.period_start,
+            period_end=first_script.period_end,
+            status=ScriptStatus.GENERATING,
         )
     )
 
@@ -540,18 +540,18 @@ def test_duplicate_script_document_period_is_rejected(session) -> None:
 
 
 def test_duplicate_script_section_order_is_rejected(session) -> None:
-    document = create_script_document(session)
+    script = create_script(session)
     section = create_stock_section(session)
     session.add_all(
         [
             ScriptSection(
-                document_id=document.id,
+                script_id=script.id,
                 section_id=section.id,
                 section_order=1,
                 section_type=SectionType.STOCK,
             ),
             ScriptSection(
-                document_id=document.id,
+                script_id=script.id,
                 section_id=section.id,
                 section_order=1,
                 section_type=SectionType.STOCK,
@@ -566,11 +566,11 @@ def test_duplicate_script_section_order_is_rejected(session) -> None:
 
 
 def test_script_section_order_must_be_positive(session) -> None:
-    document = create_script_document(session)
+    script = create_script(session)
     section = create_stock_section(session)
     session.add(
         ScriptSection(
-            document_id=document.id,
+            script_id=script.id,
             section_id=section.id,
             section_order=0,
             section_type=SectionType.STOCK,

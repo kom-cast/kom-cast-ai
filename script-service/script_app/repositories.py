@@ -13,8 +13,8 @@ from script_app.models import (
     Section,
     SectionLine,
     SectionType,
-    ScriptDocument,
-    ScriptDocumentStatus,
+    Script,
+    ScriptStatus,
     ScriptSection,
     Stock,
     Industry,
@@ -286,91 +286,91 @@ class SectionRepository:
         return self.session.scalar(stmt)
 
 
-class ScriptDocumentRepository:
+class ScriptRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def find_completed_documents(
+    def find_completed_scripts(
         self,
         user_ids: list[UUID],
         period_start: datetime,
         period_end: datetime,
-    ) -> dict[UUID, ScriptDocument]:
+    ) -> dict[UUID, Script]:
         unique_user_ids = list(dict.fromkeys(user_ids))
 
         if not unique_user_ids:
             return {}
 
-        stmt = select(ScriptDocument).where(
-            ScriptDocument.user_id.in_(unique_user_ids),
-            ScriptDocument.period_start == period_start,
-            ScriptDocument.period_end == period_end,
-            ScriptDocument.status == ScriptDocumentStatus.COMPLETED,
+        stmt = select(Script).where(
+            Script.user_id.in_(unique_user_ids),
+            Script.period_start == period_start,
+            Script.period_end == period_end,
+            Script.status == ScriptStatus.COMPLETED,
         )
 
         return {
-            document.user_id: document
-            for document in self.session.scalars(stmt)
+            script.user_id: script
+            for script in self.session.scalars(stmt)
         }
 
-    def find_documents(
+    def find_scripts(
         self,
         user_ids: list[UUID],
         period_start: datetime,
         period_end: datetime,
-    ) -> dict[UUID, ScriptDocument]:
+    ) -> dict[UUID, Script]:
         unique_user_ids = list(dict.fromkeys(user_ids))
 
         if not unique_user_ids:
             return {}
 
-        stmt = select(ScriptDocument).where(
-            ScriptDocument.user_id.in_(unique_user_ids),
-            ScriptDocument.period_start == period_start,
-            ScriptDocument.period_end == period_end,
+        stmt = select(Script).where(
+            Script.user_id.in_(unique_user_ids),
+            Script.period_start == period_start,
+            Script.period_end == period_end,
         )
         return {
-            document.user_id: document
-            for document in self.session.scalars(stmt)
+            script.user_id: script
+            for script in self.session.scalars(stmt)
         }
 
-    def find_document(
+    def find_script(
         self,
         user_id: UUID,
         period_start: datetime,
         period_end: datetime,
-    ) -> ScriptDocument | None:
-        stmt = select(ScriptDocument).where(
-            ScriptDocument.user_id == user_id,
-            ScriptDocument.period_start == period_start,
-            ScriptDocument.period_end == period_end,
+    ) -> Script | None:
+        stmt = select(Script).where(
+            Script.user_id == user_id,
+            Script.period_start == period_start,
+            Script.period_end == period_end,
         )
         return self.session.scalar(stmt)
 
-    def create_generating_document(
+    def create_generating_script(
         self,
         user_id: UUID,
         period_start: datetime,
         period_end: datetime,
-    ) -> ScriptDocument:
-        document = ScriptDocument(
+    ) -> Script:
+        script = Script(
             user_id=user_id,
             period_start=period_start,
             period_end=period_end,
-            status=ScriptDocumentStatus.GENERATING,
+            status=ScriptStatus.GENERATING,
         )
-        self.session.add(document)
+        self.session.add(script)
         self.session.flush()
-        return document
+        return script
 
     def add_sections(
         self,
-        document: ScriptDocument,
+        script: Script,
         sections: list[Section],
     ) -> list[ScriptSection]:
         script_sections = [
             ScriptSection(
-                document_id=document.id,
+                script_id=script.id,
                 section_id=section.id,
                 section_order=section_order,
                 section_type=section.section_type,
@@ -386,23 +386,23 @@ class ScriptDocumentRepository:
 
     def update_status(
         self,
-        document: ScriptDocument,
-        status: ScriptDocumentStatus,
-    ) -> ScriptDocument:
-        document.status = status
+        script: Script,
+        status: ScriptStatus,
+    ) -> Script:
+        script.status = status
         self.session.flush()
-        return document
+        return script
 
-    def retry_failed_document(
+    def retry_failed_script(
         self,
-        document: ScriptDocument,
-    ) -> ScriptDocument:
-        if document.status != ScriptDocumentStatus.FAILED:
+        script: Script,
+    ) -> Script:
+        if script.status != ScriptStatus.FAILED:
             raise ValueError(
-                "only failed documents can be retried"
+                "only failed scripts can be retried"
             )
 
-        script_sections = self.find_sections(document.id)
+        script_sections = self.find_sections(script.id)
         personal_section_ids = [
             item.section_id
             for item in script_sections
@@ -429,17 +429,17 @@ class ScriptDocumentRepository:
             for section in personal_sections:
                 self.session.delete(section)
 
-        document.status = ScriptDocumentStatus.GENERATING
+        script.status = ScriptStatus.GENERATING
         self.session.flush()
-        return document
+        return script
 
     def find_sections(
         self,
-        document_id: UUID,
+        script_id: UUID,
     ) -> list[ScriptSection]:
         stmt = (
             select(ScriptSection)
-            .where(ScriptSection.document_id == document_id)
+            .where(ScriptSection.script_id == script_id)
             .order_by(ScriptSection.section_order)
         )
         return list(self.session.scalars(stmt))
