@@ -225,7 +225,8 @@ def test_excludes_mapped_news_without_direct_stock_reference() -> None:
         2,
         "OLED TV 시장 확대",
         "LG전자 프리미엄 TV 판매에 영향을 줄 수 "
-        "있는 시장 소식입니다.",
+        "있으며 LG전자 제품 경쟁력과 연결되는 "
+        "시장 소식입니다.",
     )
 
     selected = selector.select(
@@ -236,6 +237,71 @@ def test_excludes_mapped_news_without_direct_stock_reference() -> None:
     )
 
     assert selected == [direct]
+
+
+def test_excludes_multi_topic_roundup_without_target_in_title() -> None:
+    selector = NewsSelector(max_articles=3)
+    roundup = article(
+        1,
+        "AI 산업 주요 소식 종합",
+        "\n".join(
+            [
+                "1. 반도체 기업의 생산 투자",
+                "2. 데이터센터 인프라 확대",
+                "3. LG전자 냉각 장치 인증",
+                "4. LG전자 사업 확대 가능성",
+            ]
+        ),
+    )
+    direct = article(
+        2,
+        "LG전자 액체냉각 사업 확대",
+        "LG전자가 데이터센터 냉각 장치 인증을 "
+        "확대했습니다.",
+    )
+
+    selected = selector.select(
+        [roundup, direct],
+        target_name="LG전자",
+        target_code="066570",
+        as_of=AS_OF,
+    )
+
+    assert selected == [direct]
+
+
+def test_keeps_only_highest_scored_article_for_same_event() -> None:
+    selector = NewsSelector(max_articles=3)
+    higher_score = article(
+        1,
+        "SK하이닉스, 반도체 쇼크에 주가 급락",
+        "SK하이닉스 주가가 AI 투자 우려로 "
+        "하락했습니다.",
+    )
+    lower_score = article(
+        2,
+        "SK하이닉스 약세…반도체주 동반 하락",
+        "SK하이닉스를 포함한 반도체 종목이 "
+        "약세를 보였습니다.",
+        hours_old=2,
+    )
+    different_event = article(
+        3,
+        "SK하이닉스 HBM 공급 계약",
+        "SK하이닉스가 고객사와 HBM 공급 계약을 "
+        "추진합니다.",
+    )
+
+    selected = selector.select(
+        [lower_score, different_event, higher_score],
+        target_name="SK하이닉스",
+        target_code="000660",
+        as_of=AS_OF,
+    )
+
+    assert higher_score in selected
+    assert lower_score not in selected
+    assert different_event in selected
 
 
 def test_excludes_multi_stock_price_listing() -> None:

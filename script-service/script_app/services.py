@@ -776,6 +776,20 @@ class NewsSelector:
             ("규제", "제재", "정책", "관세"),
         ),
     )
+    EVENT_KEYWORDS = (
+        (
+            "PRICE_DROP",
+            ("급락", "하락", "쇼크", "와르르", "투매", "약세"),
+        ),
+        (
+            "PRICE_RISE",
+            ("급등", "상승", "강세", "반등"),
+        ),
+        (
+            "LISTING",
+            ("상장", "기업공개", "IPO"),
+        ),
+    )
     NUMBER_PATTERN = re.compile(
         r"\d+(?:\.\d+)?"
         r"(?:%|퍼센트|원|억원|조원|달러|대|건|명)"
@@ -787,6 +801,9 @@ class NewsSelector:
     NON_WORD_PATTERN = re.compile(r"[^0-9A-Za-z가-힣]")
     SUMMARY_TOKEN_PATTERN = re.compile(
         r"[0-9A-Za-z가-힣]{2,}"
+    )
+    NUMBERED_SECTION_PATTERN = re.compile(
+        r"(?m)^\s*\d+\.\s"
     )
     PERCENT_PATTERN = re.compile(
         r"[+-]?\d+(?:\.\d+)?%"
@@ -850,6 +867,11 @@ class NewsSelector:
                 and (
                     not require_direct_match
                     or self._has_direct_reference(
+                        article,
+                        target_name=target_name,
+                        target_code=target_code,
+                    )
+                    and not self._is_multi_topic_roundup(
                         article,
                         target_name=target_name,
                         target_code=target_code,
@@ -952,6 +974,7 @@ class NewsSelector:
         result = []
         seen_news_codes = set()
         seen_titles = set()
+        seen_event_keys = set()
         selected_summary_tokens: list[set[str]] = []
 
         for item in ranked:
@@ -962,6 +985,7 @@ class NewsSelector:
             summary_tokens = self._summary_tokens(
                 item.article.summary or item.article.body
             )
+            event_key = self._event_key(item.article.title)
 
             if (
                 news_code
@@ -982,12 +1006,18 @@ class NewsSelector:
             ):
                 continue
 
+            if event_key and event_key in seen_event_keys:
+                continue
+
             result.append(item)
             seen_titles.add(normalized_title)
             selected_summary_tokens.append(summary_tokens)
 
             if news_code:
                 seen_news_codes.add(news_code)
+
+            if event_key:
+                seen_event_keys.add(event_key)
 
         return result
 
@@ -1024,16 +1054,44 @@ class NewsSelector:
         target_name: str,
         target_code: str,
     ) -> bool:
-        text = (
-            f"{article.title} "
-            f"{article.summary or article.body}"
+        summary = article.summary or article.body
+        title_has_target = bool(
+            target_name
+            and target_name in article.title
+            or target_code
+            and target_code in article.title
         )
+
+        if title_has_target:
+            return True
+
         return bool(
             target_name
-            and target_name in text
+            and summary.count(target_name) >= 2
             or target_code
-            and target_code in text
+            and summary.count(target_code) >= 2
         )
+
+    def _is_multi_topic_roundup(
+        self,
+        article: NewsArticle,
+        target_name: str,
+        target_code: str,
+    ) -> bool:
+        title_has_target = bool(
+            target_name
+            and target_name in article.title
+            or target_code
+            and target_code in article.title
+        )
+
+        if title_has_target:
+            return False
+
+        summary = article.summary or article.body
+        return len(
+            self.NUMBERED_SECTION_PATTERN.findall(summary)
+        ) >= 3
 
     def _normalize_title(self, title: str) -> str:
         normalized = self.TITLE_PREFIX_PATTERN.sub("", title)
@@ -1064,6 +1122,13 @@ class NewsSelector:
             return 0
 
         return len(first & second) / len(first | second)
+
+    def _event_key(self, title: str) -> str | None:
+        for event_key, keywords in self.EVENT_KEYWORDS:
+            if any(keyword in title for keyword in keywords):
+                return event_key
+
+        return None
 
     def _classify_topic(self, text: str) -> str:
         for topic, keywords in self.TOPIC_KEYWORDS:
