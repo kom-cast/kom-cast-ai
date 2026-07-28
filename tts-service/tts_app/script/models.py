@@ -10,12 +10,12 @@ class DialogueLine(BaseModel):
 
 class StockTarget(BaseModel):
     type: Literal["STOCK"]
-    stock_id: int
+    stock_code: str
 
 
 class IndustryTarget(BaseModel):
     type: Literal["INDUSTRY"]
-    industry_id: int
+    industry_code: str
 
 
 class UserTarget(BaseModel):
