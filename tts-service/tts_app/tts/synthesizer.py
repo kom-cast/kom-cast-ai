@@ -34,6 +34,7 @@ class LineAudio:
     audio: bytes
     audio_format: str
     words: list[WordTiming]
+    audio_duration: float
 
 
 async def _post_with_retry(client: httpx.AsyncClient, payload: dict) -> httpx.Response:
@@ -80,6 +81,7 @@ async def _synthesize_line(client: httpx.AsyncClient, line: DialogueLine) -> Lin
             WordTiming(text=w["text"], start_sec=w["start"], end_sec=w["end"])
             for w in body["words"]
         ],
+        audio_duration=body["audio_duration"],
     )
 
 

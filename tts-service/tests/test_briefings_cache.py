@@ -19,6 +19,7 @@ def _fake_line_audio(speaker: str, text: str, seconds: float = 0.5) -> LineAudio
         audio=buffer.read(),
         audio_format="mp3",
         words=[WordTiming(text=text, start_sec=0.0, end_sec=seconds)],
+        audio_duration=seconds,
     )
 
 
