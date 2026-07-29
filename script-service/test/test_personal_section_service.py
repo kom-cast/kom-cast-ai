@@ -347,13 +347,12 @@ async def test_personal_section_source_contains_latest_prices() -> None:
 
     source = ai_client.generate_personal_sections.await_args.args[0]
     assert "대상: 반도체" in source
-    assert "지수값: 12345.67" in source
+    assert "지수값:" not in source
     assert "등락: 1.01% 하락" in source
     assert "대상: 삼성전자" in source
-    assert "종가: 270000원" in source
+    assert "종가:" not in source
     assert "등락: 3.65% 상승" in source
     assert "대상: SK하이닉스" in source
-    assert "종가: 210000원" in source
     assert "등락: 0.75% 하락" in source
     service.price_repository.find_latest_stock_prices.assert_called_once_with(
         ["005930", "000660"],

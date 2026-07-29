@@ -60,6 +60,8 @@ class TestOpenAiClient:
         assert "그 질문에 직접 답해야 합니다" in personal_prompt
         assert "브리핑 기준 시각" in personal_prompt
         assert "450~525자" in personal_prompt
+        assert "등락 방향 및 변동률만" in personal_prompt
+        assert "종가나 업종의 지수값" in personal_prompt
         assert "모든 브리핑은 아침" in personal_prompt
         assert "남아 있는 불확실성" in (
             personal_prompt

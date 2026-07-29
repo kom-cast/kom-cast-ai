@@ -289,10 +289,10 @@ async def test_full_generation_and_completed_document_reuse(
         ai_client.generate_personal_sections.await_args.args[0]
     )
     assert "대상: 반도체" in personal_source
-    assert "지수값: 12345.67" in personal_source
+    assert "지수값:" not in personal_source
     assert "등락: 1.01% 하락" in personal_source
     assert "대상: 삼성전자" in personal_source
-    assert "종가: 270000원" in personal_source
+    assert "종가:" not in personal_source
     assert "등락: 3.65% 상승" in personal_source
 
     second_response = await service.generate(

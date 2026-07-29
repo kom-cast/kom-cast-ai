@@ -720,10 +720,6 @@ class PersonalSectionService:
                                 f"{price.traded_at.isoformat()}"
                             ),
                             (
-                                "지수값: "
-                                f"{PersonalSectionService._format_number(price.index_value)}"
-                            ),
-                            (
                                 "등락: "
                                 f"{PersonalSectionService._format_change(price.change_rate)}"
                             ),
@@ -747,10 +743,6 @@ class PersonalSectionService:
                             (
                                 "기준 시각: "
                                 f"{price.traded_at.isoformat()}"
-                            ),
-                            (
-                                "종가: "
-                                f"{PersonalSectionService._format_number(price.close_price)}원"
                             ),
                             (
                                 "등락: "
