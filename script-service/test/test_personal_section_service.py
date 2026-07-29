@@ -161,6 +161,11 @@ async def test_generates_personal_sections_in_one_ai_call() -> None:
     )
 
     ai_client.generate_personal_sections.assert_awaited_once()
+    source = ai_client.generate_personal_sections.await_args.args[0]
+    assert (
+        f"브리핑 기준 시각: {PERIOD_END.isoformat()}"
+        in source
+    )
     assert len(result.bridges) == 1
     assert section_repository.save_with_lines.call_count == 3
     assert [

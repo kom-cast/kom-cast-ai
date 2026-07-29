@@ -50,12 +50,16 @@ class TestOpenAiClient:
         assert "글자 수를 스스로 확인" in common_prompt
         assert "중요도가 가장 낮은 세부 정보" in common_prompt
         assert "기호 % 대신 퍼센트" in common_prompt
-        assert "opening의 두 발화는 합계 약 1분" in (
+        assert "opening의 네 발화는 합계 최대 약 1분 30초" in (
             personal_prompt
         )
-        assert "코스와 코미의 짧은 상호 인사" in (
+        assert "화자 순서는 코스, 코미, 코스, 코미" in (
             personal_prompt
         )
+        assert "하나의 명확한 질문으로 끝내고" in personal_prompt
+        assert "그 질문에 직접 답해야 합니다" in personal_prompt
+        assert "브리핑 기준 시각" in personal_prompt
+        assert "450~525자" in personal_prompt
         assert "모든 브리핑은 아침" in personal_prompt
         assert "남아 있는 불확실성" in (
             personal_prompt

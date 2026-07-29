@@ -556,6 +556,7 @@ class PersonalSectionService:
         source = self._build_source(
             content_sections,
             lines_by_section,
+            briefing_at=period_end,
             stock_prices=stock_prices,
             industry_prices=industry_prices,
             stock_names={
@@ -633,6 +634,7 @@ class PersonalSectionService:
     def _build_source(
         content_sections: list[Section],
         lines_by_section: dict,
+        briefing_at: datetime,
         stock_prices: dict[str, MarketPrice],
         industry_prices: dict[str, IndustryPrice],
         stock_names: dict[str, str],
@@ -641,6 +643,7 @@ class PersonalSectionService:
         industry_codes: list[str],
     ) -> str:
         parts = [
+            f"브리핑 기준 시각: {briefing_at.isoformat()}",
             f"콘텐츠 섹션 수: {len(content_sections)}",
             "다음 순서의 콘텐츠를 자연스럽게 연결하세요.",
         ]
