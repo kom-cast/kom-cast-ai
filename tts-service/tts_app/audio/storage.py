@@ -215,9 +215,14 @@ class DbAudioStorage(AudioStorage):
                             if target.get("type") == "STOCK"
                             else None
                         ),
+                        industry_code=(
+                            target.get("industry_code")
+                            if target.get("type") == "INDUSTRY"
+                            else None
+                        ),
                         text=segment["text"],
                         start_sec=segment["startSec"],
-                        words=segment["words"],
+                        words=json.dumps(segment["words"]),
                         created_at=now,
                     )
                 )

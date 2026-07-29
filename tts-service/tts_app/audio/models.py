@@ -4,12 +4,11 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    JSON,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     LargeBinary,
-    Numeric,
     String,
     Text,
     Uuid,
@@ -62,18 +61,18 @@ class Audio(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
-    updated_at: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
 
 class AudioSegment(Base):
-    """Spring이 소유한 audio_segments 테이블. stock_code는 STOCK 타겟
-    세그먼트에서만 채우고, 그 외(INDUSTRY/USER)는 null로 둔다 — Spring 쪽의
-    stock_code 매핑 버그(FK 위반)를 tts-service에서 원천적으로 피하기 위함."""
+    """Spring이 소유한 audio_segments 테이블. stock_code/industry_code는
+    각각 STOCK/INDUSTRY 타겟 세그먼트에서만 채우고, 그 외 타겟은 둘 다
+    null로 둔다."""
 
     __tablename__ = "audio_segments"
 
@@ -83,19 +82,22 @@ class AudioSegment(Base):
     )
     segment_order: Mapped[int] = mapped_column(Integer, nullable=False)
     speaker: Mapped[str] = mapped_column(String(50), nullable=False)
-    stock_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stock_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    industry_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    start_sec: Mapped[float] = mapped_column(Numeric, nullable=False)
-    words: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    start_sec: Mapped[float] = mapped_column(Float, nullable=False)
+    # Spring 쪽 컬럼이 실제로는 json/jsonb가 아니라 TEXT라서 저장 시 직접
+    # json.dumps로 직렬화한 문자열을 넣는다 (tts_app.audio.storage 참고).
+    words: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
