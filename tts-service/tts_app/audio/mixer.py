@@ -4,10 +4,31 @@ import io
 from dataclasses import dataclass
 
 from pydub import AudioSegment
+from pydub.silence import detect_leading_silence
 
 from tts_app.tts.synthesizer import LineAudio
 
 GAP_BETWEEN_LINES_MS = 400
+
+# mp3 인코더가 프레임 정렬을 위해 앞에 끼워 넣는 프라이밍 샘플(디코더가 그대로
+# 무음으로 복원하는 부분) 때문에, 디코드된 clip 안에서 실제 발화가
+# words[0].startSec(=0초)보다 늦게 시작할 수 있음. _match_duration은 clip
+# 끝부분만 다듬기 때문에 이 앞부분 오차는 그대로 남아, 라인 길이와 무관하게
+# 매 라인마다 일정한 만큼 하이라이트가 오디오보다 앞서가는 것처럼 들리게 됨.
+# 정상적인 발화 사이 무음까지 잘라내지 않도록 상한을 둔다.
+_LEADING_SILENCE_THRESH_DBFS = -40
+_LEADING_SILENCE_CHUNK_MS = 5
+_MAX_LEADING_TRIM_MS = 100
+
+
+def _strip_leading_silence(clip: AudioSegment) -> AudioSegment:
+    trim_ms = detect_leading_silence(
+        clip,
+        silence_threshold=_LEADING_SILENCE_THRESH_DBFS,
+        chunk_size=_LEADING_SILENCE_CHUNK_MS,
+    )
+    trim_ms = min(trim_ms, _MAX_LEADING_TRIM_MS)
+    return clip[trim_ms:] if trim_ms else clip
 
 
 def _match_duration(clip: AudioSegment, target_sec: float) -> AudioSegment:
@@ -51,6 +72,7 @@ def merge(line_audios: list[LineAudio]) -> tuple[AudioSegment, BriefingManifest]
 
     for i, item in enumerate(line_audios):
         clip = AudioSegment.from_file(io.BytesIO(item.audio), format=item.audio_format)
+        clip = _strip_leading_silence(clip)
         clip = _match_duration(clip, item.audio_duration)
 
         # NOTE: AudioSegment.empty()는 기본 포맷(frame_rate 등)이 실제 TTS
