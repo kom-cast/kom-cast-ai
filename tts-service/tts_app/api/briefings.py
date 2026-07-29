@@ -78,6 +78,16 @@ async def create_briefing(script: Script) -> dict:
             for s, target in zip(manifest.segments, line_targets)
         ],
     }
-    audio_url = await asyncio.to_thread(storage.save, cache_key, audio_bytes, response)
-    response["audioUrl"] = audio_url
+    result = await asyncio.to_thread(
+        storage.save,
+        cache_key,
+        audio_bytes,
+        response,
+        user_id=script.user_id,
+        script_id=script.script_id,
+        audio_type=script.audio_type,
+    )
+    response["audioUrl"] = result.audio_url
+    if result.audio_binary_id is not None:
+        response["audio_binary_id"] = result.audio_binary_id
     return response

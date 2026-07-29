@@ -195,7 +195,9 @@ async def test_generates_and_saves_missing_common_sections() -> None:
 
 
 @pytest.mark.asyncio
-async def test_passes_only_three_selected_news_to_ai() -> None:
+async def test_passes_only_three_selected_news_to_ai(
+    caplog,
+) -> None:
     (
         service,
         news_repository,
@@ -232,15 +234,33 @@ async def test_passes_only_three_selected_news_to_ai() -> None:
         .side_effect
     ) = lambda section, lines: section
 
-    await service.prepare_sections(
-        stock_codes=["005930"],
-        industry_codes=[],
-        period_start=PERIOD_START,
-        period_end=PERIOD_END,
-    )
+    with caplog.at_level("INFO", logger="script_app.services"):
+        await service.prepare_sections(
+            stock_codes=["005930"],
+            industry_codes=[],
+            period_start=PERIOD_START,
+            period_end=PERIOD_END,
+        )
 
     source = (
         ai_client.generate_common_section.await_args.args[0]
+    )
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        message.startswith(
+            "common_section_news_before_selection "
+            "target_type=STOCK target_code=005930"
+        )
+        and "news_count=100" in message
+        for message in messages
+    )
+    assert any(
+        message.startswith(
+            "common_section_news_after_selection "
+            "target_type=STOCK target_code=005930"
+        )
+        and "news_count=3" in message
+        for message in messages
     )
     assert source.count("\n뉴스 ") == 3
     assert "뉴스 4" not in source

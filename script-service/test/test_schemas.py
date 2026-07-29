@@ -116,6 +116,7 @@ def test_generate_user_scripts_response_contains_success_and_failure() -> None:
                 ),
                 user_id=USER_ID_1,
                 reused=False,
+                script_text="코스: 좋은 아침입니다.",
             )
         ],
         failures=[

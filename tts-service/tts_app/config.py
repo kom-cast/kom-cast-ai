@@ -21,6 +21,8 @@ def get_settings() -> Settings:
 class StorageSettings(BaseSettings):
     """오디오 저장소 설정. backend=local이면 static/audio 디스크에 저장하고,
     backend=ncp면 네이버클라우드(금융) Object Storage(S3 호환)에 저장한다.
+    backend=db면 Object Storage 대신 DATABASE_URL이 가리키는 Postgres의
+    audio_binaries 테이블에 바이너리로 저장한다(Object Storage 장애 시 임시 대안).
     https://guide-fin.ncloud-docs.com/docs/storage-storage-8-2
     """
 
@@ -28,7 +30,7 @@ class StorageSettings(BaseSettings):
         env_prefix="AUDIO_", env_file=".env", extra="ignore"
     )
 
-    backend: Literal["local", "ncp"] = "local"
+    backend: Literal["local", "ncp", "db"] = "local"
 
     ncp_endpoint_url: str = "https://kr.object.fin-ncloudstorage.com"
     ncp_region: str = "fin-standard"
@@ -63,3 +65,17 @@ class StorageSettings(BaseSettings):
 @lru_cache
 def get_storage_settings() -> StorageSettings:
     return StorageSettings()
+
+
+class DatabaseSettings(BaseSettings):
+    """AUDIO_BACKEND=db일 때 audio_binaries 테이블을 저장하는 DB 접속 정보.
+    백엔드(Spring Boot)가 같은 테이블을 읽으므로 같은 DB를 가리켜야 한다."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str = "sqlite:///./kom_cast.db"
+
+
+@lru_cache
+def get_database_settings() -> DatabaseSettings:
+    return DatabaseSettings()

@@ -55,6 +55,7 @@ class GeneratedScriptResult(BaseModel):
     script_id: UUID
     user_id: UUID
     reused: bool
+    script_text: str
 
 
 class ScriptFailureResult(BaseModel):

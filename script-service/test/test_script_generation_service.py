@@ -72,6 +72,10 @@ def create_service():
     session = Mock(spec=Session)
     interest_repository = Mock(spec=UserInterestRepository)
     script_repository = Mock(spec=ScriptRepository)
+    script_repository.get_script_text.return_value = (
+        "코스: 좋은 아침입니다.\n"
+        "코미: 주요 소식을 전해드리겠습니다."
+    )
     common_service = Mock(spec=CommonSectionService)
     common_service.prepare_sections = AsyncMock()
     personal_service = Mock(spec=PersonalSectionService)
@@ -113,6 +117,9 @@ async def test_reuses_completed_documents() -> None:
     script_repository.find_scripts.return_value = {
         USER_ID_1: existing
     }
+    interest_repository.find_by_user_ids.return_value = {
+        USER_ID_1: UserInterestTargets()
+    }
 
     result = await service.generate(
         [USER_ID_1],
@@ -122,14 +129,22 @@ async def test_reuses_completed_documents() -> None:
 
     assert result.scripts[0].script_id == existing.id
     assert result.scripts[0].reused is True
-    interest_repository.find_by_user_ids.assert_not_called()
+    assert result.scripts[0].script_text.startswith("코스: ")
+    script_repository.get_script_text.assert_called_once_with(
+        existing.id
+    )
+    interest_repository.find_by_user_ids.assert_called_once_with(
+        [USER_ID_1]
+    )
     common_service.prepare_sections.assert_not_awaited()
     personal_service.generate_sections.assert_not_awaited()
     session.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_generates_document_with_industries_before_stocks() -> None:
+async def test_generates_document_with_industries_before_stocks(
+    caplog,
+) -> None:
     (
         service,
         session,
@@ -168,15 +183,19 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         generated_personal
     )
 
-    result = await service.generate(
-        [USER_ID_1],
-        period_start=PERIOD_START,
-        period_end=PERIOD_END,
-    )
+    with caplog.at_level("INFO", logger="script_app.services"):
+        result = await service.generate(
+            [USER_ID_1],
+            period_start=PERIOD_START,
+            period_end=PERIOD_END,
+        )
 
     content_sections = (
         personal_service.generate_sections.await_args.args[0]
     )
+    assert "script_generation_user_interests" in caplog.text
+    assert "stock_codes=['005930']" in caplog.text
+    assert "industry_codes=['SEMI']" in caplog.text
     assert content_sections == [industry, stock]
     assert (
         personal_service.generate_sections.await_args.kwargs[
@@ -191,6 +210,7 @@ async def test_generates_document_with_industries_before_stocks() -> None:
         == ["SEMI"]
     )
     assert result.scripts[0].reused is False
+    assert result.scripts[0].script_text.startswith("코스: ")
     assert result.failures == []
     assert session.commit.call_count == 3
 
@@ -359,6 +379,9 @@ async def test_existing_generating_document_is_not_duplicated() -> None:
     script_repository.find_scripts.return_value = {
         USER_ID_1: generating
     }
+    interest_repository.find_by_user_ids.return_value = {
+        USER_ID_1: UserInterestTargets()
+    }
 
     result = await service.generate(
         [USER_ID_1],
@@ -369,7 +392,9 @@ async def test_existing_generating_document_is_not_duplicated() -> None:
     assert result.failures[0].code == (
         ScriptFailureCode.GENERATION_IN_PROGRESS
     )
-    interest_repository.find_by_user_ids.assert_not_called()
+    interest_repository.find_by_user_ids.assert_called_once_with(
+        [USER_ID_1]
+    )
     common_service.prepare_sections.assert_not_awaited()
     personal_service.generate_sections.assert_not_awaited()
     session.commit.assert_not_called()

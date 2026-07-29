@@ -10,6 +10,10 @@ from script_app.schemas import (
     ScriptFailureCode,
     ScriptFailureResult,
 )
+from script_app.services import (
+    ResourceInUseError,
+    ResourceNotFoundError,
+)
 
 
 client = TestClient(app)
@@ -24,7 +28,7 @@ def test_health() -> None:
     }
 
 
-def test_generate_scripts(monkeypatch) -> None:
+def test_generate_scripts(monkeypatch, caplog) -> None:
     fake_service = Mock()
     user_id_1 = UUID(
         "3ad697a8-8d7d-4f80-a66f-04d994a89611"
@@ -42,6 +46,10 @@ def test_generate_scripts(monkeypatch) -> None:
                     ),
                     user_id=user_id_1,
                     reused=False,
+                    script_text=(
+                        "코스: 좋은 아침입니다.\n"
+                        "코미: 주요 소식을 전해드리겠습니다."
+                    ),
                 )
             ],
             failures=[
@@ -65,14 +73,18 @@ def test_generate_scripts(monkeypatch) -> None:
         fake_create_script_generation_service,
     )
 
-    response = client.post(
-        "/scripts/generate",
-        json={
-            "start_at": "2026-07-22T00:00:00+09:00",
-            "end_at": "2026-07-23T00:00:00+09:00",
-            "user_ids": [str(user_id_1), str(user_id_2)],
-        },
-    )
+    with caplog.at_level(
+        "INFO",
+        logger="script_app.api.scripts",
+    ):
+        response = client.post(
+            "/scripts/generate",
+            json={
+                "start_at": "2026-07-22T00:00:00+09:00",
+                "end_at": "2026-07-23T00:00:00+09:00",
+                "user_ids": [str(user_id_1), str(user_id_2)],
+            },
+        )
 
     assert response.status_code == 200
 
@@ -84,6 +96,10 @@ def test_generate_scripts(monkeypatch) -> None:
                 ),
                 "user_id": str(user_id_1),
                 "reused": False,
+                "script_text": (
+                    "코스: 좋은 아침입니다.\n"
+                    "코미: 주요 소식을 전해드리겠습니다."
+                ),
             }
         ],
         "failures": [
@@ -96,6 +112,9 @@ def test_generate_scripts(monkeypatch) -> None:
     }
 
     fake_service.generate.assert_awaited_once()
+    assert "script_generation_request_received" in caplog.text
+    assert str(user_id_1) in caplog.text
+    assert str(user_id_2) in caplog.text
 
 
 def test_generate_scripts_rejects_timestamp_without_timezone() -> None:
@@ -157,3 +176,73 @@ def test_generate_scripts_returns_500_for_request_wide_failure(
     )
 
     assert response.status_code == 500
+
+
+def test_delete_script_returns_no_content(monkeypatch) -> None:
+    script_id = UUID("1ee14e43-fb5c-4225-8cb3-dc84a31e8423")
+    fake_service = Mock()
+    monkeypatch.setattr(
+        (
+            "script_app.api.scripts."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/scripts/{script_id}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    fake_service.delete_script.assert_called_once_with(script_id)
+
+
+def test_delete_script_returns_not_found(monkeypatch) -> None:
+    fake_service = Mock()
+    fake_service.delete_script.side_effect = ResourceNotFoundError
+    monkeypatch.setattr(
+        (
+            "script_app.api.scripts."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/scripts/{UUID(int=1)}")
+
+    assert response.status_code == 404
+
+
+def test_delete_section_returns_no_content(monkeypatch) -> None:
+    section_id = UUID("2ee14e43-fb5c-4225-8cb3-dc84a31e8423")
+    fake_service = Mock()
+    monkeypatch.setattr(
+        (
+            "script_app.api.sections."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/sections/{section_id}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    fake_service.delete_section.assert_called_once_with(section_id)
+
+
+def test_delete_section_returns_conflict_when_in_use(
+    monkeypatch,
+) -> None:
+    fake_service = Mock()
+    fake_service.delete_section.side_effect = ResourceInUseError
+    monkeypatch.setattr(
+        (
+            "script_app.api.sections."
+            "create_script_deletion_service"
+        ),
+        lambda session: fake_service,
+    )
+
+    response = client.delete(f"/sections/{UUID(int=1)}")
+
+    assert response.status_code == 409
