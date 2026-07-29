@@ -4,6 +4,7 @@ import json
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -29,8 +30,20 @@ class AudioStorage(ABC):
         """캐시 히트 시 저장된 응답(JSON)을 그대로 반환하고, 없으면 None."""
 
     @abstractmethod
-    def save(self, cache_key: str, audio_bytes: bytes, manifest: dict) -> StorageResult:
-        """오디오와 매니페스트를 저장하고 결과(audioUrl 등)를 반환한다."""
+    def save(
+        self,
+        cache_key: str,
+        audio_bytes: bytes,
+        manifest: dict,
+        *,
+        user_id: str | None = None,
+        script_id: str | None = None,
+        audio_type: str = "DAILY_BRIEFING",
+    ) -> StorageResult:
+        """오디오와 매니페스트를 저장하고 결과(audioUrl 등)를 반환한다.
+
+        user_id/script_id/audio_type은 AUDIO_BACKEND=db일 때만 쓰인다
+        (Spring의 audios 테이블에 직접 부모 레코드를 만들기 위함)."""
 
 
 class LocalAudioStorage(AudioStorage):
@@ -50,7 +63,16 @@ class LocalAudioStorage(AudioStorage):
             return json.loads(manifest_path.read_text())
         return None
 
-    def save(self, cache_key: str, audio_bytes: bytes, manifest: dict) -> StorageResult:
+    def save(
+        self,
+        cache_key: str,
+        audio_bytes: bytes,
+        manifest: dict,
+        *,
+        user_id: str | None = None,
+        script_id: str | None = None,
+        audio_type: str = "DAILY_BRIEFING",
+    ) -> StorageResult:
         audio_url = f"/static/audio/{cache_key}.mp3"
         full_manifest = {**manifest, "audioUrl": audio_url}
 
@@ -97,7 +119,16 @@ class NcpObjectStorage(AudioStorage):
             raise
         return json.loads(obj["Body"].read())
 
-    def save(self, cache_key: str, audio_bytes: bytes, manifest: dict) -> StorageResult:
+    def save(
+        self,
+        cache_key: str,
+        audio_bytes: bytes,
+        manifest: dict,
+        *,
+        user_id: str | None = None,
+        script_id: str | None = None,
+        audio_type: str = "DAILY_BRIEFING",
+    ) -> StorageResult:
         audio_url = f"{self.cdn_base_url}/{self._audio_key(cache_key)}"
         full_manifest = {**manifest, "audioUrl": audio_url}
 
@@ -134,12 +165,62 @@ class DbAudioStorage(AudioStorage):
         # 항상 캐시 미스로 처리한다(Object Storage 복구 전까지 임시).
         return None
 
-    def save(self, cache_key: str, audio_bytes: bytes, manifest: dict) -> StorageResult:
-        from tts_app.audio.models import AudioBinary
+    def save(
+        self,
+        cache_key: str,
+        audio_bytes: bytes,
+        manifest: dict,
+        *,
+        user_id: str | None = None,
+        script_id: str | None = None,
+        audio_type: str = "DAILY_BRIEFING",
+    ) -> StorageResult:
+        from tts_app.audio.models import Audio, AudioBinary, AudioSegment
+
+        if user_id is None:
+            raise ValueError(
+                "AUDIO_BACKEND=db는 audios.user_id(not null)를 채워야 해서 "
+                "Script 요청에 user_id가 반드시 있어야 합니다."
+            )
 
         audio_binary_id = uuid.uuid4()
+        audio_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+
         with self._session_factory() as session:
             session.add(AudioBinary(id=audio_binary_id, data=audio_bytes))
+            session.add(
+                Audio(
+                    id=audio_id,
+                    user_id=uuid.UUID(user_id),
+                    script_id=uuid.UUID(script_id) if script_id else None,
+                    audio_type=audio_type,
+                    # 정식 파일 URL이 없으므로 audio_binary_id를 그대로 넣어둔다.
+                    # audio_binaries.id로 스트리밍하도록 소비 측(Spring)과 맞춰야 한다.
+                    audio_url=str(audio_binary_id),
+                    duration_seconds=round(manifest["durationSec"]),
+                    created_at=now,
+                )
+            )
+            for order, segment in enumerate(manifest.get("segments", [])):
+                target = segment.get("target") or {}
+                session.add(
+                    AudioSegment(
+                        id=uuid.uuid4(),
+                        audio_id=audio_id,
+                        segment_order=order,
+                        speaker=segment["speaker"],
+                        stock_code=(
+                            target.get("stock_code")
+                            if target.get("type") == "STOCK"
+                            else None
+                        ),
+                        text=segment["text"],
+                        start_sec=segment["startSec"],
+                        words=segment["words"],
+                        created_at=now,
+                    )
+                )
             session.commit()
         return StorageResult(audio_url="", audio_binary_id=str(audio_binary_id))
 
