@@ -12,11 +12,15 @@ def test_local_storage_roundtrip(tmp_path):
 
     assert storage.read_manifest("abc") is None
 
-    audio_url = storage.save("abc", b"fake-mp3-bytes", {"durationSec": 1.0})
+    result = storage.save("abc", b"fake-mp3-bytes", {"durationSec": 1.0})
 
-    assert audio_url == "/static/audio/abc.mp3"
+    assert result.audio_url == "/static/audio/abc.mp3"
+    assert result.audio_binary_id is None
     assert (tmp_path / "abc.mp3").read_bytes() == b"fake-mp3-bytes"
-    assert storage.read_manifest("abc") == {"durationSec": 1.0, "audioUrl": audio_url}
+    assert storage.read_manifest("abc") == {
+        "durationSec": 1.0,
+        "audioUrl": result.audio_url,
+    }
 
 
 def test_storage_settings_requires_ncp_fields_when_backend_is_ncp():
@@ -76,12 +80,48 @@ def test_ncp_storage_roundtrip(monkeypatch):
 
     assert storage.read_manifest("abc") is None
 
-    audio_url = storage.save("abc", b"fake-mp3-bytes", {"durationSec": 1.0})
+    result = storage.save("abc", b"fake-mp3-bytes", {"durationSec": 1.0})
 
-    assert audio_url == "https://cdn.example.com/abc.mp3"
+    assert result.audio_url == "https://cdn.example.com/abc.mp3"
+    assert result.audio_binary_id is None
     assert fake_client.objects["abc.mp3"] == b"fake-mp3-bytes"
     assert json.loads(fake_client.objects["abc.json"]) == {
         "durationSec": 1.0,
-        "audioUrl": audio_url,
+        "audioUrl": result.audio_url,
     }
-    assert storage.read_manifest("abc") == {"durationSec": 1.0, "audioUrl": audio_url}
+    assert storage.read_manifest("abc") == {
+        "durationSec": 1.0,
+        "audioUrl": result.audio_url,
+    }
+
+
+def test_db_storage_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test.db")
+    from tts_app.config import get_database_settings
+
+    get_database_settings.cache_clear()
+
+    from tts_app.audio.storage import DbAudioStorage
+
+    storage = DbAudioStorage()
+
+    assert storage.read_manifest("abc") is None
+
+    result = storage.save("abc", b"fake-mp3-bytes", {"durationSec": 1.0})
+
+    assert result.audio_url == ""
+    assert result.audio_binary_id is not None
+    # 캐시 조회는 지원하지 않으므로 저장 후에도 여전히 미스로 처리된다.
+    assert storage.read_manifest("abc") is None
+
+    import uuid
+
+    from tts_app.audio.db import SessionFactory
+    from tts_app.audio.models import AudioBinary
+
+    with SessionFactory() as session:
+        row = session.get(AudioBinary, uuid.UUID(result.audio_binary_id))
+        assert row is not None
+        assert bytes(row.data) == b"fake-mp3-bytes"
+
+    get_database_settings.cache_clear()
