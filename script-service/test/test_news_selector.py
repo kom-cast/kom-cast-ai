@@ -61,7 +61,7 @@ def test_selects_at_most_three_important_news() -> None:
     assert important in selected
 
 
-def test_excludes_advertisements_and_deduplicates_news() -> None:
+def test_excludes_advertisements_before_backfilling_duplicates() -> None:
     selector = NewsSelector(max_articles=3)
     original = article(
         1,
@@ -105,17 +105,11 @@ def test_excludes_advertisements_and_deduplicates_news() -> None:
     )
 
     assert advertisement not in selected
-    assert len(
-        [
-            item
-            for item in selected
-            if "반도체 투자" in item.title
-        ]
-    ) == 1
+    assert len(selected) == 3
     assert product in selected
 
 
-def test_deduplicates_different_titles_with_similar_summaries() -> None:
+def test_backfills_similar_news_when_only_three_are_available() -> None:
     selector = NewsSelector(max_articles=3)
     higher_score = article(
         1,
@@ -145,7 +139,7 @@ def test_deduplicates_different_titles_with_similar_summaries() -> None:
     )
 
     assert higher_score in selected
-    assert lower_score not in selected
+    assert lower_score in selected
     assert unrelated in selected
 
 
@@ -214,7 +208,7 @@ def test_returns_available_news_without_padding() -> None:
     assert selected == [only_news]
 
 
-def test_excludes_mapped_news_without_direct_stock_reference() -> None:
+def test_keeps_available_news_when_direct_match_filter_would_remove_it() -> None:
     selector = NewsSelector(max_articles=3)
     unrelated = article(
         1,
@@ -236,10 +230,10 @@ def test_excludes_mapped_news_without_direct_stock_reference() -> None:
         as_of=AS_OF,
     )
 
-    assert selected == [direct]
+    assert set(selected) == {unrelated, direct}
 
 
-def test_excludes_multi_topic_roundup_without_target_in_title() -> None:
+def test_keeps_available_news_when_roundup_filter_would_remove_it() -> None:
     selector = NewsSelector(max_articles=3)
     roundup = article(
         1,
@@ -267,10 +261,10 @@ def test_excludes_multi_topic_roundup_without_target_in_title() -> None:
         as_of=AS_OF,
     )
 
-    assert selected == [direct]
+    assert set(selected) == {roundup, direct}
 
 
-def test_keeps_only_highest_scored_article_for_same_event() -> None:
+def test_backfills_same_event_when_only_three_are_available() -> None:
     selector = NewsSelector(max_articles=3)
     higher_score = article(
         1,
@@ -300,11 +294,11 @@ def test_keeps_only_highest_scored_article_for_same_event() -> None:
     )
 
     assert higher_score in selected
-    assert lower_score not in selected
+    assert lower_score in selected
     assert different_event in selected
 
 
-def test_excludes_multi_stock_price_listing() -> None:
+def test_keeps_available_news_when_listing_filter_would_remove_it() -> None:
     selector = NewsSelector(max_articles=3)
     listing = article(
         1,
@@ -328,7 +322,20 @@ def test_excludes_multi_stock_price_listing() -> None:
         as_of=AS_OF,
     )
 
-    assert selected == [substantive]
+    assert set(selected) == {listing, substantive}
+
+
+def test_returns_no_news_when_no_news_is_available() -> None:
+    selector = NewsSelector(max_articles=3)
+
+    selected = selector.select(
+        [],
+        target_name="SK하이닉스",
+        target_code="000660",
+        as_of=AS_OF,
+    )
+
+    assert selected == []
 
 
 def test_industry_selection_does_not_require_name_mention() -> None:

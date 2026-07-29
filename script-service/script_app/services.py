@@ -1,5 +1,6 @@
 import asyncio
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID
@@ -853,38 +854,37 @@ class NewsSelector:
         as_of: datetime,
         require_direct_match: bool = True,
     ) -> list[NewsArticle]:
-        ranked = sorted(
-            (
-                self._rank(
-                    article,
-                    target_name=target_name,
-                    target_code=target_code,
-                    as_of=as_of,
-                )
-                for article in articles
-                if not self._is_advertisement(article)
-                and not self._is_low_quality_listing(article)
+        ranked_articles = [
+            self._rank(
+                article,
+                target_name=target_name,
+                target_code=target_code,
+                as_of=as_of,
+            )
+            for article in articles
+        ]
+        ranked = self._sort_ranked_news(
+            item
+            for item in ranked_articles
+            if (
+                not self._is_advertisement(item.article)
+                and not self._is_low_quality_listing(item.article)
                 and (
                     not require_direct_match
                     or self._has_direct_reference(
-                        article,
+                        item.article,
                         target_name=target_name,
                         target_code=target_code,
                     )
                     and not self._is_multi_topic_roundup(
-                        article,
+                        item.article,
                         target_name=target_name,
                         target_code=target_code,
                     )
                 )
-            ),
-            key=lambda item: (
-                -item.score,
-                -item.article.published_at.timestamp(),
-                item.article.title,
-                str(item.article.id),
-            ),
+            )
         )
+        ranked_articles = self._sort_ranked_news(ranked_articles)
         deduplicated = self._deduplicate(ranked)
         selected: list[RankedNews] = []
         selected_article_keys = set()
@@ -912,7 +912,35 @@ class NewsSelector:
                 if len(selected) == self.max_articles:
                     break
 
+        target_count = min(len(articles), self.max_articles)
+        if len(selected) < target_count:
+            # Filters determine priority, but must not make available
+            # news disappear when fewer than max_articles remain.
+            for item in ranked_articles:
+                if id(item.article) in selected_article_keys:
+                    continue
+
+                selected.append(item)
+                selected_article_keys.add(id(item.article))
+
+                if len(selected) == target_count:
+                    break
+
         return [item.article for item in selected]
+
+    @staticmethod
+    def _sort_ranked_news(
+        ranked: Iterable[RankedNews],
+    ) -> list[RankedNews]:
+        return sorted(
+            ranked,
+            key=lambda item: (
+                -item.score,
+                -item.article.published_at.timestamp(),
+                item.article.title,
+                str(item.article.id),
+            ),
+        )
 
     def _rank(
         self,
